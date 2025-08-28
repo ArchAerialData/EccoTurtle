@@ -3,9 +3,15 @@
 # Double-click to run (Python + Pygame required). First run generates music/SFX.
 # ------------------------------------------------------------
 
-import os, sys, math, random, time, struct, wave
+import os, sys, math, random, time
 import pygame
 from pygame.locals import *
+
+from .config import (TITLE, DEFAULT_W, DEFAULT_H, SCALE, FPS,
+                     POWERUP_THRESHOLD, POWERUP_DURATION, SAVE_FILE)
+from .environment import Environment, draw_environment
+from .sound import load_or_generate_audio, play_sfx, _sfx
+
 
 # Graceful message if pygame isn't installed
 def _msgbox(title, text):
@@ -14,191 +20,6 @@ def _msgbox(title, text):
         ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)
     except Exception:
         print(f"{title}: {text}")
-
-# ------------------------- Config --------------------------
-TITLE           = "Sea Turtle Echo - Deep Dive"
-DEFAULT_W, DEFAULT_H = 1280, 720
-SCALE           = 4
-FPS             = 60
-MUSIC_FILE      = "turtle_deep_synth.wav"
-SFX_EAT_FILE    = "sfx_eat_synth.wav"
-SFX_HURT_FILE   = "sfx_hurt_synth.wav"
-SFX_DASH_FILE   = "sfx_dash_synth.wav"
-SFX_POWERUP_FILE = "sfx_powerup_synth.wav"
-SAVE_FILE       = "tide_highscore.json"
-
-# Game settings
-POWERUP_THRESHOLD = 15  # Jellyfish needed for power-up
-POWERUP_DURATION = 10.0  # Seconds
-
-# ------------------- Deep Synth Music Maker ------------------
-def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100):
-    """Creates a deep, atmospheric synth track inspired by retrowave/synthwave styles"""
-    
-    # Darker, moodier progression in A minor
-    melody = [
-        ("A3",2),("C4",2),("E4",2),("D4",2),
-        ("F3",2),("A3",2),("C4",2),("E4",2),
-        ("G3",2),("B3",2),("D4",2),("C4",2),
-        ("F3",2),("A3",2),("G3",2),("E3",2),
-        # Second phrase with some variation
-        ("A4",1),("G4",1),("F4",2),("E4",2),("D4",2),
-        ("C4",2),("E4",2),("A3",2),("C4",2),
-        ("D4",1),("E4",1),("F4",2),("G4",2),("A4",2),
-        ("E4",4),("A3",4),
-    ]
-    
-    # Deep bass with sub frequencies
-    bass_prog = ["A1","F1","G1","A1","F1","C1","D1","E1"]
-    bass_notes = []
-    for i in range(bars):
-        bass_notes += [(bass_prog[i%8], 8)]
-    
-    # Note frequencies
-    A4 = 440.0
-    NOTES = {'C':-9, 'C#':-8, 'Db':-8, 'D':-7, 'D#':-6, 'Eb':-6, 'E':-5, 'F':-4, 'F#':-3,
-             'Gb':-3, 'G':-2, 'G#':-1, 'Ab':-1, 'A':0, 'A#':1, 'Bb':1, 'B':2}
-    
-    def note_to_freq(name):
-        if name is None: return None
-        pitch = ''.join([c for c in name if c.isalpha() or c == '#'])
-        octave = int(''.join([c for c in name if c.isdigit()]))
-        semis = NOTES[pitch] + (octave-4)*12
-        return A4 * (2 ** (semis/12))
-    
-    # Timing
-    spb = 60.0/tempo_bpm
-    total_beats = bars*8
-    total_seconds = total_beats*spb
-    num_samples = int(total_seconds*sample_rate)
-    
-    # Timeline arrays
-    mel_timeline = [None]*num_samples
-    bass_timeline = [None]*num_samples
-    
-    def place_line(line, start_beat, timeline):
-        t = start_beat
-        for n, d in line:
-            start_s = int(t*spb*sample_rate)
-            end_s = int((t+d)*spb*sample_rate)
-            f = note_to_freq(n)
-            for i in range(start_s, min(end_s, num_samples)):
-                timeline[i] = f
-            t += d
-    
-    # Extend melody to fill bars
-    beats_total = sum(d for _,d in melody)
-    bars_len_beats = bars * 8
-    while beats_total < bars_len_beats:
-        melody += melody
-        beats_total = sum(d for _,d in melody)
-    
-    place_line(melody[:bars_len_beats], 0, mel_timeline)
-    place_line(bass_notes, 0, bass_timeline)
-    
-    # Render with rich synthesis
-    data = bytearray()
-    reverb_buffer = [0.0] * 8000  # Simple reverb
-    reverb_idx = 0
-    
-    for i in range(num_samples):
-        m = mel_timeline[i]
-        b = bass_timeline[i]
-        sample = 0.0
-        
-        # Deep sub bass with saw wave
-        if b is not None:
-            t = (i/sample_rate)*b
-            # Saw wave
-            saw = 2.0 * ((t % 1.0) - 0.5)
-            # Add sub octave sine for depth
-            sub = math.sin(2*math.pi*b*0.5*t/sample_rate)
-            # Filter envelope
-            env = min(1.0, (i % int(8*spb*sample_rate)) / (sample_rate*0.1))
-            env *= max(0.3, 1.0 - ((i % int(8*spb*sample_rate)) / (8*spb*sample_rate)))
-            sample += 0.25 * (saw * 0.7 + sub * 0.3) * env
-        
-        # Lead with detuned saw waves (supersaw effect)
-        if m is not None:
-            lead = 0.0
-            detune_cents = [-7, -3, 0, 3, 7]  # Slight detuning for thickness
-            for cents in detune_cents:
-                freq = m * (2 ** (cents/1200))
-                t = (i/sample_rate)*freq
-                saw = 2.0 * ((t % 1.0) - 0.5)
-                lead += saw * 0.15
-            
-            # ADSR envelope
-            note_pos = i % int(2*spb*sample_rate)
-            attack = min(1.0, note_pos/(sample_rate*0.05))
-            decay = max(0.7, 1.0 - (note_pos-sample_rate*0.05)/(sample_rate*0.1)) if note_pos > sample_rate*0.05 else 1.0
-            sustain = 0.7
-            release = max(0.0, 1.0 - (note_pos-sample_rate*1.5)/(sample_rate*0.5)) if note_pos > sample_rate*1.5 else 1.0
-            env = attack * decay * sustain * release
-            
-            # Low-pass filter simulation (simple)
-            lead = lead * 0.6 + random.random()*0.002
-            sample += lead * env * 0.3
-        
-        # Add reverb
-        reverb_buffer[reverb_idx] = sample * 0.3
-        reverb_idx = (reverb_idx + 1) % len(reverb_buffer)
-        reverb = reverb_buffer[(reverb_idx - 3500) % len(reverb_buffer)] * 0.4
-        reverb += reverb_buffer[(reverb_idx - 7000) % len(reverb_buffer)] * 0.2
-        sample += reverb
-        
-        # Soft clipping for warmth
-        if abs(sample) > 0.7:
-            sample = math.tanh(sample)
-        else:
-            sample = max(-1.0, min(1.0, sample))
-        
-        data += struct.pack('<h', int(sample*32767))
-    
-    with wave.open(path, 'wb') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(data)
-
-def write_wav_synth_beep(path, freq=880, ms=150, sample_rate=44100, shape="saw"):
-    samples = int(sample_rate * ms/1000.0)
-    data = bytearray()
-    for i in range(samples):
-        t = i/sample_rate
-        if shape=="saw":
-            val = 2.0 * ((freq*t % 1.0) - 0.5)
-        elif shape=="sine":
-            val = math.sin(2*math.pi*freq*t)
-        elif shape=="powerup":
-            # Special sound for powerup
-            val = math.sin(2*math.pi*freq*t) * 0.5
-            val += math.sin(2*math.pi*freq*1.5*t) * 0.3
-            val += math.sin(2*math.pi*freq*2*t) * 0.2
-        else:  # pulse
-            val = 1.0 if math.sin(2*math.pi*freq*t) >= 0 else -1.0
-        
-        # Envelope
-        attack = min(1.0, i/(samples*0.1))
-        release = max(0.0, 1.0 - (i-samples*0.7)/(samples*0.3)) if i > samples*0.7 else 1.0
-        fade = attack * release
-        
-        s = max(-1.0, min(1.0, val * 0.3 * fade))
-        data += struct.pack('<h', int(s*32767))
-    
-    with wave.open(path, 'wb') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(data)
-
-# ----------------------- Environment Types ----------------------
-class Environment:
-    OCEAN_FLOOR = "Ocean Floor"
-    ROCKY_REEF = "Rocky Reef"
-    CORAL_COVE = "Coral Cove"
-    BEACH = "Beach Shallows"
-    OIL_RIG = "Oil Rig"
 
 # ----------------------- Character Types ----------------------
 class CharacterType:
@@ -657,33 +478,6 @@ def dist2(a, b, x, y):
 def circle_collide(ax, ay, ar, bx, by, br):
     return dist2(ax, ay, bx, by) <= (ar + br) * (ar + br)
 
-def load_or_generate_audio():
-    here = os.path.dirname(os.path.abspath(__file__))
-    music = os.path.join(here, MUSIC_FILE)
-    eat = os.path.join(here, SFX_EAT_FILE)
-    hurt = os.path.join(here, SFX_HURT_FILE)
-    dash = os.path.join(here, SFX_DASH_FILE)
-    powerup = os.path.join(here, SFX_POWERUP_FILE)
-    
-    if not os.path.exists(music):
-        write_wav_deep_synth_melody(music, tempo_bpm=100, bars=16)
-    if not os.path.exists(eat):
-        write_wav_synth_beep(eat, freq=523, ms=100, shape="sine")  # C5
-    if not os.path.exists(hurt):
-        write_wav_synth_beep(hurt, freq=110, ms=300, shape="saw")  # A2
-    if not os.path.exists(dash):
-        write_wav_synth_beep(dash, freq=293, ms=150, shape="saw")  # D4
-    if not os.path.exists(powerup):
-        write_wav_synth_beep(powerup, freq=440, ms=500, shape="powerup")  # A4
-    
-    return music, eat, hurt, dash, powerup
-
-_sfx = {}
-def play_sfx(name):
-    ch = pygame.mixer.find_channel()
-    if ch and name in _sfx:
-        ch.play(_sfx[name])
-
 def load_highscore(path):
     try:
         with open(path, 'r', encoding='utf-8') as f:
@@ -697,99 +491,6 @@ def save_highscore(path, score):
             f.write(str(int(score)))
     except Exception:
         pass
-
-# ----------------------- Environment Drawing -----------------------
-def draw_environment(surf, env_type, offset, time_val):
-    """Draw environment-specific background elements"""
-    w, h = surf.get_width(), surf.get_height()
-    
-    if env_type == Environment.OCEAN_FLOOR:
-        # Deep dark blue gradient
-        for y in range(0, h, 2):
-            depth = y / h
-            c = int(20 - depth * 15)
-            b = int(60 - depth * 30)
-            pygame.draw.line(surf, (5, c, b), (0, y), (w, y))
-        
-        # Sand dunes at bottom
-        for x in range(0, w + 40, 40):
-            dx = x - (offset % 40)
-            height = 10 + int(math.sin((x + offset) * 0.02) * 5)
-            pygame.draw.ellipse(surf, (100, 90, 60), 
-                              (dx - 20, h - height, 40, height * 2))
-    
-    elif env_type == Environment.ROCKY_REEF:
-        # Medium blue with rocks
-        surf.fill((20, 50, 80))
-        
-        # Rocky formations
-        for x in range(0, w + 60, 60):
-            dx = x - (offset % 60)
-            # Rock pillars
-            pygame.draw.rect(surf, (60, 65, 70), 
-                           (dx - 15, h - 80, 30, 80))
-            pygame.draw.polygon(surf, (50, 55, 60),
-                              [(dx - 20, h), (dx + 20, h), 
-                               (dx + 10, h - 90), (dx - 10, h - 90)])
-    
-    elif env_type == Environment.CORAL_COVE:
-        # Bright turquoise gradient
-        for y in range(0, h, 2):
-            depth = y / h
-            r = int(30 + depth * 20)
-            g = int(140 - depth * 40)
-            b = int(180 - depth * 30)
-            pygame.draw.line(surf, (r, g, b), (0, y), (w, y))
-        
-        # Coral formations
-        for x in range(0, w + 50, 50):
-            dx = x - (offset % 50)
-            # Brain coral
-            pygame.draw.circle(surf, (255, 120, 150), (dx, h - 20), 15)
-            pygame.draw.circle(surf, (255, 140, 170), (dx, h - 20), 12)
-            # Staghorn coral
-            for branch in range(-2, 3):
-                by = h - 40 - abs(branch) * 10
-                bx = dx + branch * 8
-                pygame.draw.line(surf, (255, 100, 50), 
-                               (dx, h - 10), (bx, by), 3)
-    
-    elif env_type == Environment.BEACH:
-        # Light blue shallow water
-        surf.fill((100, 180, 220))
-        
-        # Sunlight rays
-        for x in range(0, w, 30):
-            sx = x + int(math.sin(time_val * 0.001 + x) * 10)
-            pygame.draw.line(surf, (150, 210, 240), 
-                           (sx, 0), (sx - 20, h), 2)
-        
-        # Sandy bottom with shells
-        pygame.draw.rect(surf, (230, 210, 170), (0, h - 30, w, 30))
-        for x in range(0, w + 40, 40):
-            dx = x - (offset % 40)
-            # Shells
-            pygame.draw.circle(surf, (255, 230, 200), (dx, h - 15), 3)
-    
-    elif env_type == Environment.OIL_RIG:
-        # Dark polluted water
-        surf.fill((30, 40, 45))
-        
-        # Oil rig pillars
-        for x in range(0, w + 120, 120):
-            dx = x - (offset % 120)
-            # Support beams
-            pygame.draw.rect(surf, (80, 80, 80), (dx - 5, 0, 10, h))
-            # Cross beams
-            for y in range(40, h, 40):
-                pygame.draw.line(surf, (70, 70, 70), 
-                               (dx - 20, y), (dx + 20, y - 20), 3)
-        
-        # Oil slicks
-        for x in range(0, w + 80, 80):
-            dx = x - (offset % 80) + int(math.sin(time_val * 0.0005 + x) * 20)
-            pygame.draw.ellipse(surf, (20, 10, 30), 
-                              (dx - 30, h - 60, 60, 20))
 
 # ----------------------- Character Selection -----------------------
 def character_selection_screen(screen, clock, base_font, title_font):
@@ -1020,8 +721,7 @@ def run():
     start_menu = False  
     fullscreen = False
     
-    here = os.path.dirname(os.path.abspath(__file__))
-    highscore_path = os.path.join(here, SAVE_FILE)
+    highscore_path = SAVE_FILE
     highscore = load_highscore(highscore_path)
     
     t = 0.0
@@ -1115,6 +815,12 @@ def run():
                 distance_traveled = 0
                 current_env_index = (current_env_index + 1) % len(environments)
                 current_env = environments[current_env_index]
+                # spawn fresh food in new environment
+                for _ in range(3):
+                    jellies.append(
+                        Jelly(base_w + rng.randrange(20, 100),
+                              rng.randrange(20, base_h - 20))
+                    )
             
             # Update turtle
             turtle.update(dt, keys, scroll_speed)
