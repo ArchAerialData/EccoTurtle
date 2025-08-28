@@ -230,7 +230,9 @@ class Jelly:
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
         self.y += math.sin(self.phase) * 30 * dt_sec
-        self.x += scroll_speed * dt_sec * 0.5  # Move slower than scroll
+        # Drift left with the current so new jellies spawn on the right and
+        # gently float across the screen
+        self.x -= scroll_speed * dt_sec * 0.5
         self.phase += self.speed * dt_sec * 2
         
         base_h = pygame.display.get_surface().get_height() // SCALE
@@ -241,9 +243,10 @@ class Jelly:
 
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
-        # Enhanced jellyfish with gradient effect
+        # Enhanced jellyfish with translucent dome and inner glow
         pygame.draw.circle(surf, (231, 192, 255), (cx, cy), self.r)
-        pygame.draw.circle(surf, (241, 212, 255), (cx, cy-2), self.r-2)
+        pygame.draw.circle(surf, (250, 240, 255), (cx, cy-2), self.r-3)
+        pygame.draw.circle(surf, (255, 255, 255), (cx, cy-4), 1)
         
         # Animated tentacles
         tentacle_wave = math.sin(self.phase * 2) * 2
@@ -263,7 +266,9 @@ class PlasticBag:
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
-        self.x += (math.cos(self.swing) * 20 + scroll_speed * 0.7) * dt_sec
+        # Sway with currents while drifting left with the level
+        self.x += math.cos(self.swing) * 20 * dt_sec
+        self.x -= scroll_speed * dt_sec * 0.7
         self.y += math.sin(self.swing) * 10 * dt_sec
         self.swing += self.speed * dt_sec * 2
         
@@ -278,6 +283,8 @@ class PlasticBag:
         bag_color = (235, 245, 255)
         # Main body
         pygame.draw.rect(surf, bag_color, (cx-5, cy-7, 10, 12), 1)
+        # Slight shading
+        pygame.draw.line(surf, (215, 225, 235), (cx-5, cy-1), (cx+5, cy-1))
         # Handles
         pygame.draw.line(surf, bag_color, (cx-5, cy-7), (cx-7, cy-11), 1)
         pygame.draw.line(surf, bag_color, (cx+5, cy-7), (cx+7, cy-11), 1)
@@ -298,7 +305,8 @@ class MantisShrimp:
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
-        self.x += (self.direction * self.speed * 30 + scroll_speed * 0.8) * dt_sec
+        self.x += self.direction * self.speed * 30 * dt_sec
+        self.x -= scroll_speed * dt_sec * 0.8
         
         # Random punching animation
         if random.random() < 0.005:
@@ -318,6 +326,11 @@ class MantisShrimp:
         for i, color in enumerate(body_colors):
             segment_x = cx - i * 3 * self.direction
             pygame.draw.ellipse(surf, color, (segment_x - 4, cy - 3, 8, 6))
+        # Tail fan
+        pygame.draw.polygon(surf, (255, 80, 40),
+                            [(cx - 12*self.direction, cy - 2),
+                             (cx - 16*self.direction, cy),
+                             (cx - 12*self.direction, cy + 2)])
         
         # Raptorial claws
         if self.punch_timer > 0:
@@ -345,7 +358,7 @@ class SeaHorse:
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
-        self.x += scroll_speed * dt_sec * 0.6
+        self.x -= scroll_speed * dt_sec * 0.6
         self.y += math.sin(self.bob) * 20 * dt_sec
         self.bob += dt_sec * 3
 
@@ -368,8 +381,8 @@ class SeaHorse:
         
         # Fin
         fin_wave = int(math.sin(self.bob * 2) * 2)
-        pygame.draw.ellipse(surf, (255, 220, 140), 
-                          (cx - 8 + fin_wave, cy - 3, 4, 6))
+        pygame.draw.ellipse(surf, (255, 220, 140),
+                            (cx - 8 + fin_wave, cy - 3, 4, 6))
 
 class Clownfish:
     def __init__(self, x, y):
@@ -381,7 +394,8 @@ class Clownfish:
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
-        self.x += (math.cos(self.swim_cycle) * 40 + scroll_speed * 0.9) * dt_sec
+        self.x += math.cos(self.swim_cycle) * 40 * dt_sec
+        self.x -= scroll_speed * dt_sec * 0.9
         self.y += math.sin(self.swim_cycle * 2) * 20 * dt_sec
         self.swim_cycle += dt_sec * 4
 
@@ -399,8 +413,8 @@ class Clownfish:
         pygame.draw.circle(surf, (0, 0, 0), (cx + 3, cy - 1), 1)
         
         # Fins
-        pygame.draw.circle(surf, (255, 160, 20), (cx, cy - 4), 2)
-        pygame.draw.circle(surf, (255, 160, 20), (cx, cy + 4), 2)
+        pygame.draw.circle(surf, (255, 160, 20), (cx - 5, cy), 2)
+        pygame.draw.circle(surf, (255, 160, 20), (cx + 5, cy), 2)
 
 class Pufferfish:
     def __init__(self, x, y):
@@ -413,7 +427,7 @@ class Pufferfish:
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
-        self.x += scroll_speed * dt_sec * 0.5
+        self.x -= scroll_speed * dt_sec * 0.5
         
         # Random puffing
         if not self.puffed and random.random() < 0.003:
@@ -441,8 +455,12 @@ class Pufferfish:
                 pygame.draw.line(surf, (150, 150, 50), (sx, sy), (ex, ey), 1)
         else:
             # Normal state
-            pygame.draw.ellipse(surf, (180, 180, 80), 
-                              (cx - self.r, cy - self.r + 2, self.r * 2, self.r * 2 - 4))
+            pygame.draw.ellipse(surf, (180, 180, 80),
+                                (cx - self.r, cy - self.r + 2,
+                                 self.r * 2, self.r * 2 - 4))
+            # Subtle spots for texture
+            pygame.draw.circle(surf, (170, 170, 70), (cx - 2, cy - 2), 1)
+            pygame.draw.circle(surf, (170, 170, 70), (cx + 2, cy + 1), 1)
         
         # Eye
         pygame.draw.circle(surf, (0, 0, 0), (cx + 3, cy - 2), 1)
@@ -660,8 +678,8 @@ def run():
     title_font = pygame.font.SysFont("consolas", 22, bold=True)
     
     # Audio
-    music, eat, hurt, dash, powerup = load_or_generate_audio()
-    pygame.mixer.music.load(music)
+    music_map, eat, hurt, dash, powerup = load_or_generate_audio()
+    pygame.mixer.music.load(music_map[Environment.BEACH])
     
     _sfx["eat"] = pygame.mixer.Sound(eat)
     _sfx["hurt"] = pygame.mixer.Sound(hurt)
@@ -789,6 +807,8 @@ def run():
                     world_offset = 0
                     current_env_index = 0
                     current_env = environments[current_env_index]
+                    pygame.mixer.music.load(music_map[current_env])
+                    pygame.mixer.music.play(-1)
                     
                     # Respawn entities
                     for _ in range(5):
@@ -815,6 +835,8 @@ def run():
                 distance_traveled = 0
                 current_env_index = (current_env_index + 1) % len(environments)
                 current_env = environments[current_env_index]
+                pygame.mixer.music.load(music_map[current_env])
+                pygame.mixer.music.play(-1)
                 # spawn fresh food in new environment
                 for _ in range(3):
                     jellies.append(
