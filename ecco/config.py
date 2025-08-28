@@ -9,7 +9,12 @@ DEFAULT_W, DEFAULT_H = 1280, 720
 SCALE = 4
 FPS = 60
 
-MUSIC_FILE = ASSET_DIR / 'turtle_deep_synth.wav'
+# Background tracks for each environment
+MUSIC_BEACH_FILE = ASSET_DIR / 'music_beach.wav'
+MUSIC_CORAL_FILE = ASSET_DIR / 'music_coral.wav'
+MUSIC_REEF_FILE = ASSET_DIR / 'music_reef.wav'
+MUSIC_OCEAN_FILE = ASSET_DIR / 'music_ocean.wav'
+MUSIC_RIG_FILE = ASSET_DIR / 'music_rig.wav'
 SFX_EAT_FILE = ASSET_DIR / 'sfx_eat_synth.wav'
 SFX_HURT_FILE = ASSET_DIR / 'sfx_hurt_synth.wav'
 SFX_DASH_FILE = ASSET_DIR / 'sfx_dash_synth.wav'

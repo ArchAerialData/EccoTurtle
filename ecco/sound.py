@@ -6,7 +6,10 @@ import wave
 
 import pygame
 
-from .config import (MUSIC_FILE, SFX_DASH_FILE, SFX_EAT_FILE,
+from .environment import Environment
+from .config import (MUSIC_BEACH_FILE, MUSIC_CORAL_FILE, MUSIC_REEF_FILE,
+                     MUSIC_OCEAN_FILE, MUSIC_RIG_FILE,
+                     SFX_DASH_FILE, SFX_EAT_FILE,
                      SFX_HURT_FILE, SFX_POWERUP_FILE)
 
 
@@ -121,7 +124,8 @@ def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100)
         wf.writeframes(data)
 
 
-def write_wav_synth_beep(path, freq=880, ms=150, sample_rate=44100, shape="saw"):
+def write_wav_synth_beep(path, freq=880, ms=150, sample_rate=44100,
+                         shape="saw", volume=0.3):
     samples = int(sample_rate * ms/1000.0)
     data = bytearray()
     for i in range(samples):
@@ -141,7 +145,7 @@ def write_wav_synth_beep(path, freq=880, ms=150, sample_rate=44100, shape="saw")
         release = max(0.0, 1.0 - (i-samples*0.7)/(samples*0.3)) if i > samples*0.7 else 1.0
         fade = attack * release
 
-        s = max(-1.0, min(1.0, val * 0.3 * fade))
+        s = max(-1.0, min(1.0, val * volume * fade))
         data += struct.pack('<h', int(s*32767))
 
     with wave.open(path, 'wb') as wf:
@@ -160,16 +164,34 @@ def play_sfx(name):
 
 
 def load_or_generate_audio():
-    music = str(MUSIC_FILE)
+    music_map = {
+        Environment.BEACH: str(MUSIC_BEACH_FILE),
+        Environment.CORAL_COVE: str(MUSIC_CORAL_FILE),
+        Environment.ROCKY_REEF: str(MUSIC_REEF_FILE),
+        Environment.OCEAN_FLOOR: str(MUSIC_OCEAN_FILE),
+        Environment.OIL_RIG: str(MUSIC_RIG_FILE),
+    }
+
     eat = str(SFX_EAT_FILE)
     hurt = str(SFX_HURT_FILE)
     dash = str(SFX_DASH_FILE)
     powerup = str(SFX_POWERUP_FILE)
 
-    if not os.path.exists(music):
-        write_wav_deep_synth_melody(music, tempo_bpm=100, bars=16)
+    # Generate music for each environment if missing with varied moods
+    if not os.path.exists(music_map[Environment.BEACH]):
+        write_wav_deep_synth_melody(music_map[Environment.BEACH], tempo_bpm=120)
+    if not os.path.exists(music_map[Environment.CORAL_COVE]):
+        write_wav_deep_synth_melody(music_map[Environment.CORAL_COVE], tempo_bpm=100)
+    if not os.path.exists(music_map[Environment.ROCKY_REEF]):
+        write_wav_deep_synth_melody(music_map[Environment.ROCKY_REEF], tempo_bpm=90)
+    if not os.path.exists(music_map[Environment.OCEAN_FLOOR]):
+        write_wav_deep_synth_melody(music_map[Environment.OCEAN_FLOOR], tempo_bpm=70)
+    if not os.path.exists(music_map[Environment.OIL_RIG]):
+        write_wav_deep_synth_melody(music_map[Environment.OIL_RIG], tempo_bpm=60)
+
+    # Softer chomp sound
     if not os.path.exists(eat):
-        write_wav_synth_beep(eat, freq=523, ms=100, shape="sine")
+        write_wav_synth_beep(eat, freq=330, ms=180, shape="sine", volume=0.2)
     if not os.path.exists(hurt):
         write_wav_synth_beep(hurt, freq=110, ms=300, shape="saw")
     if not os.path.exists(dash):
@@ -177,4 +199,4 @@ def load_or_generate_audio():
     if not os.path.exists(powerup):
         write_wav_synth_beep(powerup, freq=440, ms=500, shape="powerup")
 
-    return music, eat, hurt, dash, powerup
+    return music_map, eat, hurt, dash, powerup
