@@ -67,13 +67,16 @@ class Turtle:
             self.body_color = (140, 32, 110)
             self.accent_color = (235, 190, 220)
         elif character_type == CharacterType.BISEXUAL_TURTLE:
-            self.shell_color = (85, 18, 102)
-            self.body_color = (110, 32, 140)
-            self.accent_color = (220, 190, 235)
+            self.shell_color = (255, 255, 255)
+            self.body_color = (255, 255, 255)
+            self.accent_color = (255, 255, 255)
         else:  # Tortoise
             self.shell_color = (92, 64, 35)
             self.body_color = (115, 80, 44)
             self.accent_color = (140, 120, 80)
+
+        self.rainbow = (character_type == CharacterType.BISEXUAL_TURTLE)
+        self.rainbow_phase = 0.0
 
     def update(self, dt, keys, scroll_speed):
         dt_sec = dt / 1000.0
@@ -127,8 +130,8 @@ class Turtle:
         self.vx *= (1.0 - (1.0 - self.drag) * dt_sec * 60)
         self.vy *= (1.0 - (1.0 - self.drag) * dt_sec * 60)
         
-        # Auto-scroll with the level
-        self.x += (self.vx + scroll_speed) * dt_sec
+        # Auto-scroll with the level but reduce current pushing right
+        self.x += (self.vx + scroll_speed * 0.2) * dt_sec
         self.y += self.vy * dt_sec
         
         # Get current screen dimensions
@@ -154,6 +157,9 @@ class Turtle:
             if self.powerup_timer <= 0:
                 self.powered_up = False
 
+        if self.rainbow:
+            self.rainbow_phase = (self.rainbow_phase + dt_sec * 60) % 360
+
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
         r = self.radius
@@ -162,24 +168,39 @@ class Turtle:
         if self.powered_up:
             glow_r = r + 5 + int(math.sin(pygame.time.get_ticks() * 0.01) * 2)
             pygame.draw.circle(surf, (255, 200, 100), (cx, cy), glow_r, 2)
-        
-        # Enhanced sprite with more detail
-        # Shell base
-        pygame.draw.ellipse(surf, self.shell_color, (cx-r, cy-r, r*2, r*2))
-        
-        # Shell pattern (hexagonal segments)
-        for angle in range(0, 360, 60):
-            px = cx + int(math.cos(math.radians(angle)) * r * 0.6)
-            py = cy + int(math.sin(math.radians(angle)) * r * 0.6)
-            pygame.draw.circle(surf, self.body_color, (px, py), 3)
-        
-        # Shell highlight
-        pygame.draw.ellipse(surf, self.body_color, (cx-r+2, cy-r+2, (r*2)-4, (r*2)-4), 2)
+
+        flipper_color = self.shell_color
+        head_color = self.accent_color
+
+        if self.rainbow:
+            for i in range(7):
+                color = pygame.Color(0)
+                hue = (self.rainbow_phase + i * (360 / 7)) % 360
+                color.hsva = (hue, 80, 100, 100)
+                radius = max(1, int(r - i * r / 7))
+                pygame.draw.circle(surf, color, (cx, cy), radius)
+            pygame.draw.circle(surf, (255, 255, 255), (cx, cy), r, 2)
+            flipper_color = pygame.Color(0)
+            flipper_color.hsva = (self.rainbow_phase % 360, 80, 100, 100)
+            head_color = pygame.Color(0)
+            head_color.hsva = ((self.rainbow_phase + 180) % 360, 80, 100, 100)
+        else:
+            # Shell base
+            pygame.draw.ellipse(surf, self.shell_color, (cx-r, cy-r, r*2, r*2))
+
+            # Shell pattern (hexagonal segments)
+            for angle in range(0, 360, 60):
+                px = cx + int(math.cos(math.radians(angle)) * r * 0.6)
+                py = cy + int(math.sin(math.radians(angle)) * r * 0.6)
+                pygame.draw.circle(surf, self.body_color, (px, py), 3)
+
+            # Shell highlight
+            pygame.draw.ellipse(surf, self.body_color, (cx-r+2, cy-r+2, (r*2)-4, (r*2)-4), 2)
         
         # Head (bigger and more detailed)
         hx = cx + int(math.cos(math.radians(self.angle)) * r * 1.2)
         hy = cy + int(math.sin(math.radians(self.angle)) * r * 1.2)
-        pygame.draw.circle(surf, self.accent_color, (hx, hy), 4)
+        pygame.draw.circle(surf, head_color, (hx, hy), 4)
         
         # Eyes (two eyes for more detail)
         eye1x = hx + int(math.cos(math.radians(self.angle + 20)) * 3)
@@ -197,21 +218,21 @@ class Turtle:
         f1y = int(math.sin(math.radians(self.angle + 60 + swim_offset)) * r * 1.0)
         f2x = int(math.cos(math.radians(self.angle - 60 - swim_offset)) * r * 1.0)
         f2y = int(math.sin(math.radians(self.angle - 60 - swim_offset)) * r * 1.0)
-        pygame.draw.ellipse(surf, self.shell_color, (cx+f1x-3, cy+f1y-2, 6, 4))
-        pygame.draw.ellipse(surf, self.shell_color, (cx+f2x-3, cy+f2y-2, 6, 4))
+        pygame.draw.ellipse(surf, flipper_color, (cx+f1x-3, cy+f1y-2, 6, 4))
+        pygame.draw.ellipse(surf, flipper_color, (cx+f2x-3, cy+f2y-2, 6, 4))
         
         # Back flippers
         b1x = int(math.cos(math.radians(self.angle + 150 - swim_offset)) * r * 0.8)
         b1y = int(math.sin(math.radians(self.angle + 150 - swim_offset)) * r * 0.8)
         b2x = int(math.cos(math.radians(self.angle - 150 + swim_offset)) * r * 0.8)
         b2y = int(math.sin(math.radians(self.angle - 150 + swim_offset)) * r * 0.8)
-        pygame.draw.ellipse(surf, self.shell_color, (cx+b1x-2, cy+b1y-2, 4, 3))
-        pygame.draw.ellipse(surf, self.shell_color, (cx+b2x-2, cy+b2y-2, 4, 3))
+        pygame.draw.ellipse(surf, flipper_color, (cx+b1x-2, cy+b1y-2, 4, 3))
+        pygame.draw.ellipse(surf, flipper_color, (cx+b2x-2, cy+b2y-2, 4, 3))
         
         # Tail
         tx = cx - int(math.cos(math.radians(self.angle)) * r * 1.0)
         ty = cy - int(math.sin(math.radians(self.angle)) * r * 1.0)
-        pygame.draw.circle(surf, self.shell_color, (tx, ty), 2)
+        pygame.draw.circle(surf, flipper_color, (tx, ty), 2)
         
         # Mouth animation when eating
         if self.mouth_timer > 0:
