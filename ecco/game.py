@@ -598,53 +598,81 @@ class SharkBoss:
         return (self.x < -100 and self.dir == -1) or (self.x > base_w + 100 and self.dir == 1) or self.life <= 0
 
     def draw(self, surf):
+        """Draw a chunky 8‑bit style great white with an animated jaw.
+        Facing is RIGHT by default and flipped for left.
+        """
         cx, cy = int(self.x), int(self.y)
-        # Body facing RIGHT by default
-        body = pygame.Surface((120, 60), pygame.SRCALPHA)
-        # Torso
-        pygame.draw.ellipse(body, (112, 138, 155), (10, 14, 90, 32))
-        # Darker dorsal area
-        pygame.draw.ellipse(body, (92, 112, 128), (10, 12, 90, 22), 0)
-        # Dorsal fin (bigger, scary)
-        pygame.draw.polygon(body, (105, 125, 142), [(52, 6), (64, 26), (42, 24)])
-        # Pectoral fin
-        pygame.draw.polygon(body, (105, 125, 142), [(46, 36), (30, 52), (56, 44)])
-        # Tail on LEFT
-        pygame.draw.polygon(body, (95, 115, 135), [(12, 30), (2, 16), (2, 44)])
-        # Eye near front (RIGHT)
-        pygame.draw.circle(body, (20, 20, 25), (92, 28), 3)
-        pygame.draw.circle(body, (240, 240, 255), (91, 27), 1)
-        # Gills
-        for gx in (80, 84, 88):
-            pygame.draw.line(body, (85, 100, 115), (gx, 28), (gx, 38), 2)
 
-        # Mouth group at RIGHT tip
-        mouth = pygame.Surface((50, 36), pygame.SRCALPHA)
-        near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/160.0))
+        # Colors: dark top, light belly, outline, gum/mouth
+        dark = (68, 80, 95)
+        mid = (92, 108, 123)
+        belly = (215, 225, 235)
+        outline = (30, 36, 44)
+        gum = (70, 16, 16)
+
+        # Build sprite in a local surface so we can flip
+        w, h = 128, 64
+        sprite = pygame.Surface((w, h), pygame.SRCALPHA)
+
+        # Body silhouette (torso)
+        pygame.draw.ellipse(sprite, mid, (16, 18, 88, 30))
+        # Dark dorsal gradient (simple overlay)
+        pygame.draw.ellipse(sprite, dark, (18, 16, 84, 22))
+
+        # Tail
+        pygame.draw.polygon(sprite, mid, [(16, 32), (4, 18), (4, 46)])
+        pygame.draw.polygon(sprite, outline, [(16, 32), (4, 18), (4, 46)], 1)
+
+        # Dorsal fin
+        pygame.draw.polygon(sprite, mid, [(56, 8), (70, 26), (46, 24)])
+        pygame.draw.polygon(sprite, outline, [(56, 8), (70, 26), (46, 24)], 1)
+
+        # Pectoral fin (downwards)
+        pygame.draw.polygon(sprite, mid, [(54, 38), (36, 56), (66, 46)])
+        pygame.draw.polygon(sprite, outline, [(54, 38), (36, 56), (66, 46)], 1)
+
+        # Eye
+        pygame.draw.circle(sprite, outline, (96, 28), 3)
+        pygame.draw.circle(sprite, (240, 246, 255), (95, 27), 1)
+
+        # Gill slits
+        for gx in (82, 86, 90):
+            pygame.draw.line(sprite, outline, (gx, 28), (gx, 38), 2)
+
+        # Belly highlight
+        pygame.draw.ellipse(sprite, belly, (30, 30, 64, 16))
+
+        # Mouth at the right tip with animated open amount
+        mouth = pygame.Surface((56, 40), pygame.SRCALPHA)
         if self.clamp_timer > 0:
-            open_amt = 0
+            open_px = 0
         else:
-            open_amt = int(12 + 10 * near * (0.5 + 0.5*math.sin(self.jaw_phase)))
-        # Mouth interior / blood tint
-        pygame.draw.polygon(mouth, (70, 12, 12), [(0,18), (46, 18-open_amt//2), (46, 18+open_amt//2)])
-        # Upper jaw
-        pygame.draw.polygon(mouth, (225, 235, 245), [(0, 10), (46, 18-open_amt//2), (24, 16)])
-        # Lower jaw
-        pygame.draw.polygon(mouth, (225, 235, 245), [(0, 26), (46, 18+open_amt//2), (24, 20)])
-        # Teeth top/bottom
-        for i in range(4, 46, 7):
-            pygame.draw.polygon(mouth, (255,255,255), [(i, 16), (i-2, 18), (i+2, 18)])
-            pygame.draw.polygon(mouth, (255,255,255), [(i, 20), (i-2, 18), (i+2, 18)])
+            # Open more when near vertically and oscillate
+            near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/160.0))
+            open_px = int(16 + 14 * near * (0.5 + 0.5 * math.sin(self.jaw_phase)))
+
+        # Mouth cavity
+        pygame.draw.polygon(mouth, gum, [(2, 20), (54, 20 - open_px//2), (54, 20 + open_px//2)])
+        # Upper/Lower jaws (white belly color)
+        pygame.draw.polygon(mouth, belly, [(2, 10), (54, 20 - open_px//2), (26, 16)])
+        pygame.draw.polygon(mouth, belly, [(2, 30), (54, 20 + open_px//2), (26, 24)])
+        # Teeth rows
+        for i in range(6, 54, 8):
+            pygame.draw.polygon(mouth, (255,255,255), [(i, 16), (i-3, 20), (i+3, 20)])
+            pygame.draw.polygon(mouth, (255,255,255), [(i, 24), (i-3, 20), (i+3, 20)])
+        # Outline mouth edges for 8‑bit contrast
+        pygame.draw.lines(mouth, outline, False, [(2,10),(26,16),(54,20-open_px//2)], 1)
+        pygame.draw.lines(mouth, outline, False, [(2,30),(26,24),(54,20+open_px//2)], 1)
 
         # Compose facing
         if self.dir == 1:  # moving right, face right
-            surf.blit(body, (cx-60, cy-30))
-            surf.blit(mouth, (cx+20, cy-18))
+            surf.blit(sprite, (cx - w//2 + 0, cy - h//2))
+            surf.blit(mouth, (cx + w//2 - 36, cy - 20))
         else:
-            body = pygame.transform.flip(body, True, False)
+            sprite = pygame.transform.flip(sprite, True, False)
             mouth = pygame.transform.flip(mouth, True, False)
-            surf.blit(body, (cx-60, cy-30))
-            surf.blit(mouth, (cx-70, cy-18))
+            surf.blit(sprite, (cx - w//2, cy - h//2))
+            surf.blit(mouth, (cx - w//2 - 20, cy - 20))
 
 class Particle:
     def __init__(self, x, y, vx, vy, life, color, radius=2, kind="dot"):
@@ -1115,7 +1143,11 @@ def run():
                     mods = pygame.key.get_mods()
                     if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_ALT) and (mods & pygame.KMOD_SHIFT):
                         if not shark:
-                            shark = SharkBoss('left' if rng.random()<0.5 else 'right', base_w, base_h, turtle)
+                            # Spawn from the side furthest from the player
+                            left_dist = turtle.x
+                            right_dist = base_w - turtle.x
+                            spawn_side = 'left' if left_dist > right_dist else 'right'
+                            shark = SharkBoss(spawn_side, base_w, base_h, turtle)
                             boss_cooldown = 90.0
         
         keys = pygame.key.get_pressed()
@@ -1194,7 +1226,11 @@ def run():
             if not shark and boss_cooldown <= 0.0:
                 # Very low chance per second (~1 per 5 minutes)
                 if rng.random() < (dt/1000.0) * (1.0/300.0):
-                    shark = SharkBoss('left' if rng.random()<0.5 else 'right', base_w, base_h, turtle)
+                    # Spawn from the side furthest from the player
+                    left_dist = turtle.x
+                    right_dist = base_w - turtle.x
+                    spawn_side = 'left' if left_dist > right_dist else 'right'
+                    shark = SharkBoss(spawn_side, base_w, base_h, turtle)
                     boss_cooldown = 90.0
             if shark:
                 shark.update(dt, scroll_speed)
