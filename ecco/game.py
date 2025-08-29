@@ -255,28 +255,37 @@ class Turtle:
         ty = cy - int(math.sin(math.radians(self.angle)) * r * 1.0)
         pygame.draw.circle(surf, flipper_color, (tx, ty), 2)
         
-        # Mouth animation when eating (beak-like chomp)
+        # Mouth animation when eating (smaller, beak-like bite)
         if self.mouth_timer > 0:
             ang = math.radians(self.angle)
             dirx, diry = math.cos(ang), math.sin(ang)
             perpx, perpy = -diry, dirx
-            base_x = cx + int(dirx * r * 1.0)
-            base_y = cy + int(diry * r * 1.0)
-            # Chomp opens then closes over ~0.4s
-            phase = max(0.0, min(1.0, self.mouth_timer / 0.4))
-            open_amt = math.sin(phase * math.pi)  # 0..1..0
-            jaw_len = int(r * 0.9)
-            jaw_width = 2 + int(5 * open_amt)
+            base_x = cx + int(dirx * (r * 0.9))
+            base_y = cy + int(diry * (r * 0.9))
+            # Quick open then snap close
+            t = 1.0 - max(0.0, min(1.0, self.mouth_timer / 0.4))
+            open_amt = math.sin(t * math.pi)  # 0..1..0
+            jaw_len = int(r * 0.6)
+            jaw_gap = 1 + int(4 * open_amt)
             tip_x = base_x + int(dirx * jaw_len)
             tip_y = base_y + int(diry * jaw_len)
-            upper_base = (base_x - int(perpx * jaw_width), base_y - int(perpy * jaw_width))
-            lower_base = (base_x + int(perpx * jaw_width), base_y + int(perpy * jaw_width))
-            upper_tip = (tip_x - int(perpx * (jaw_width * 0.6)), tip_y - int(perpy * (jaw_width * 0.6)))
-            lower_tip = (tip_x + int(perpx * (jaw_width * 0.6)), tip_y + int(perpy * (jaw_width * 0.6)))
-            mouth_color = (245, 250, 255)
-            outline = (20, 40, 30)
-            pygame.draw.polygon(surf, mouth_color, [upper_base, upper_tip, lower_tip, lower_base])
-            pygame.draw.lines(surf, outline, True, [upper_base, upper_tip, lower_tip, lower_base], 1)
+            # Upper and lower small triangles to emulate a beak
+            upper = [
+                (base_x - int(perpx * jaw_gap), base_y - int(perpy * jaw_gap)),
+                (tip_x - int(perpx * (jaw_gap * 0.5)), tip_y - int(perpy * (jaw_gap * 0.5))),
+                (base_x, base_y)
+            ]
+            lower = [
+                (base_x + int(perpx * jaw_gap), base_y + int(perpy * jaw_gap)),
+                (tip_x + int(perpx * (jaw_gap * 0.5)), tip_y + int(perpy * (jaw_gap * 0.5))),
+                (base_x, base_y)
+            ]
+            mouth_fill = (240, 245, 250)
+            outline = (30, 60, 50)
+            pygame.draw.polygon(surf, mouth_fill, upper)
+            pygame.draw.polygon(surf, mouth_fill, lower)
+            pygame.draw.lines(surf, outline, True, upper, 1)
+            pygame.draw.lines(surf, outline, True, lower, 1)
 
 class Jelly:
     _bell_cache = {}
@@ -557,6 +566,50 @@ class Pufferfish:
         # Eye
         pygame.draw.circle(surf, (0, 0, 0), (cx + 3, cy - 2), 1)
 
+class SharkBoss:
+    def __init__(self, spawn_side, base_w, base_h, target):
+        self.dir = 1 if spawn_side == 'left' else -1
+        self.x = -60 if self.dir == 1 else base_w + 60
+        self.y = target.y + random.uniform(-40, 40)
+        self.speed = 220.0
+        self.r = 18
+        self.life = 10.0  # seconds until despawn
+        self.jaw_phase = 0.0
+        self.target = target
+
+    def update(self, dt, scroll_speed):
+        dt_sec = dt / 1000.0
+        # Home slightly towards target y
+        dy = (self.target.y - self.y)
+        self.y += max(-120, min(120, dy)) * 0.6 * dt_sec
+        self.x += self.dir * self.speed * dt_sec - scroll_speed * 0.2 * dt_sec
+        self.jaw_phase = (self.jaw_phase + dt_sec * 6) % (2*math.pi)
+        self.life -= dt_sec
+
+    def offscreen(self, base_w):
+        return (self.x < -100 and self.dir == -1) or (self.x > base_w + 100 and self.dir == 1) or self.life <= 0
+
+    def draw(self, surf):
+        cx, cy = int(self.x), int(self.y)
+        # Body
+        body_color = (120, 140, 160)
+        pygame.draw.ellipse(surf, body_color, (cx - 28, cy - 12, 56, 24))
+        # Tail
+        tail_dir = -1 if self.dir == 1 else 1
+        pygame.draw.polygon(surf, (100, 120, 140), [(cx + 28*self.dir, cy), (cx + 38*self.dir, cy-10), (cx + 38*self.dir, cy+10)])
+        # Fin
+        pygame.draw.polygon(surf, (100, 120, 140), [(cx, cy-14), (cx+6*self.dir, cy-2), (cx-6*self.dir, cy-2)])
+        # Jaw open/close
+        open_amt = 6 + int(6 * (0.5 + 0.5*math.sin(self.jaw_phase)))
+        snout_x = cx - 20*self.dir
+        upper = [(snout_x, cy - 6), (cx - 4*self.dir, cy - 2), (cx - 4*self.dir, cy - 2 - open_amt//2)]
+        lower = [(snout_x, cy + 6), (cx - 4*self.dir, cy + 2), (cx - 4*self.dir, cy + 2 + open_amt//2)]
+        pygame.draw.polygon(surf, (230, 230, 240), upper)
+        pygame.draw.polygon(surf, (230, 230, 240), lower)
+        # Teeth
+        for t in range(-open_amt//2, open_amt//2+1, 4):
+            pygame.draw.line(surf, (240,240,255), (cx - 6*self.dir, cy + t), (cx - 10*self.dir, cy + t + (2 if t<0 else -2)), 1)
+
 class Particle:
     def __init__(self, x, y, vx, vy, life, color, radius=2, kind="dot"):
         self.x, self.y = float(x), float(y)
@@ -695,11 +748,80 @@ def character_selection_screen(screen, clock, base_font, title_font):
         pygame.display.flip()
         clock.tick(FPS)
 
+def options_menu_screen(screen, clock, base_font, title_font, volume, ambient_index):
+    selected = 0
+    names = ["Low", "Medium", "High"]
+    while True:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                return None, volume, ambient_index
+            if event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    return "back", volume, ambient_index
+                elif event.key == K_UP or event.key == K_w:
+                    selected = (selected - 1) % 3
+                elif event.key == K_DOWN or event.key == K_s:
+                    selected = (selected + 1) % 3
+                elif event.key == K_LEFT or event.key == K_a:
+                    if selected == 0:
+                        volume = max(0.0, volume - 0.1)
+                        pygame.mixer.music.set_volume(volume)
+                    elif selected == 1:
+                        ambient_index = (ambient_index - 1) % 3
+                elif event.key == K_RIGHT or event.key == K_d:
+                    if selected == 0:
+                        volume = min(1.0, volume + 0.1)
+                        pygame.mixer.music.set_volume(volume)
+                    elif selected == 1:
+                        ambient_index = (ambient_index + 1) % 3
+                elif event.key == K_RETURN or event.key == K_SPACE:
+                    if selected == 2:
+                        return "back", volume, ambient_index
+
+        screen.fill((8, 22, 44))
+        wave_offset = int(math.sin(pygame.time.get_ticks() * 0.001) * 6)
+        title = title_font.render("OPTIONS", True, (220, 255, 255))
+        screen.blit(title, (screen.get_width()//2 - title.get_width()//2, 100 + wave_offset))
+
+        y = 250
+        vol = base_font.render(f"Music Volume: {int(volume*100)}%", True, (220,255,255) if selected==0 else (180,220,240))
+        amb = base_font.render(f"Ambient: {names[ambient_index]}", True, (220,255,255) if selected==1 else (180,220,240))
+        back = base_font.render("Back", True, (220,255,255) if selected==2 else (180,220,240))
+        screen.blit(vol, (screen.get_width()//2 - vol.get_width()//2, y))
+        # Volume bar
+        bar_x = screen.get_width()//2 - 100
+        bar_y = y + 22
+        pygame.draw.rect(screen, (100,100,100), (bar_x, bar_y, 200, 10), 1)
+        pygame.draw.rect(screen, (100,200,255), (bar_x, bar_y, int(200*volume), 10))
+
+        y += 60
+        screen.blit(amb, (screen.get_width()//2 - amb.get_width()//2, y))
+        dots_x = screen.get_width()//2 - 30
+        dots_y = y + 22
+        for di in range(3):
+            col = (120,160,180) if di <= ambient_index else (60,80,90)
+            pygame.draw.circle(screen, col, (dots_x + di*20, dots_y), 5)
+
+        y += 60
+        screen.blit(back, (screen.get_width()//2 - back.get_width()//2, y))
+
+        hint = base_font.render("Arrows move, Left/Right adjust, Enter back", True, (150,200,220))
+        screen.blit(hint, (screen.get_width()//2 - hint.get_width()//2, screen.get_height()-50))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
 # ----------------------- Main Menu with Volume Control -----------------------
 def main_menu_screen(screen, clock, base_font, title_font, volume):
-    """Main menu with volume control"""
+    """Main menu with volume + ambient density"""
     selected = 0
-    menu_items = ["Start Game", f"Music Volume: {int(volume * 100)}%", "Quit"]
+    ambient_names = ["Low", "Medium", "High"]
+    ambient_index = 1
+    menu_items = [
+        "Start Game",
+        "Options",
+        "Quit",
+    ]
     
     while True:
         for event in pygame.event.get():
@@ -707,26 +829,24 @@ def main_menu_screen(screen, clock, base_font, title_font, volume):
                 return None, volume
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
-                    return None, volume
+                    return None, volume, ambient_index
                 elif event.key == K_UP or event.key == K_w:
                     selected = (selected - 1) % len(menu_items)
                 elif event.key == K_DOWN or event.key == K_s:
                     selected = (selected + 1) % len(menu_items)
                 elif event.key == K_LEFT or event.key == K_a:
-                    if selected == 1:  # Volume control
-                        volume = max(0.0, volume - 0.1)
-                        pygame.mixer.music.set_volume(volume)
-                        menu_items[1] = f"Music Volume: {int(volume * 100)}%"
+                    pass
                 elif event.key == K_RIGHT or event.key == K_d:
-                    if selected == 1:  # Volume control
-                        volume = min(1.0, volume + 0.1)
-                        pygame.mixer.music.set_volume(volume)
-                        menu_items[1] = f"Music Volume: {int(volume * 100)}%"
+                    pass
                 elif event.key == K_RETURN or event.key == K_SPACE:
                     if selected == 0:  # Start
-                        return "start", volume
+                        return "start", volume, ambient_index
+                    elif selected == 1:  # Options
+                        # Open options submenu
+                        _, volume, ambient_index = options_menu_screen(
+                            screen, clock, base_font, title_font, volume, ambient_index)
                     elif selected == 2:  # Quit
-                        return None, volume
+                        return None, volume, ambient_index
         
         # Draw menu
         screen.fill((8, 22, 44))
@@ -755,14 +875,7 @@ def main_menu_screen(screen, clock, base_font, title_font, volume):
             item_text = base_font.render(item, True, color)
             screen.blit(item_text, (screen.get_width()//2 - item_text.get_width()//2, y))
             
-            # Volume bar
-            if i == 1:
-                bar_x = screen.get_width()//2 - 100
-                bar_y = y + 25
-                pygame.draw.rect(screen, (100, 100, 100), 
-                               (bar_x, bar_y, 200, 10), 1)
-                pygame.draw.rect(screen, (100, 200, 255), 
-                               (bar_x, bar_y, int(200 * volume), 10))
+            # Bars moved to Options submenu
         
         # Instructions
         inst = base_font.render("↑↓ to navigate, ←→ to adjust volume, ENTER to select", 
@@ -811,7 +924,7 @@ def run():
     pygame.mixer.music.set_volume(volume)
     pygame.mixer.music.play(-1)
     
-    menu_result, volume = main_menu_screen(screen, clock, base_font, title_font, volume)
+    menu_result, volume, ambient_index = main_menu_screen(screen, clock, base_font, title_font, volume)
     if menu_result is None:
         pygame.quit()
         return
@@ -841,6 +954,8 @@ def run():
     creatures = []  # New interactive creatures
     bubbles = []
     particles = []
+    shark = None
+    boss_cooldown = 30.0
     
     # Environment management
     environments = [Environment.BEACH, Environment.CORAL_COVE, Environment.ROCKY_REEF,
@@ -860,6 +975,9 @@ def run():
     paused = False
     start_menu = False  
     fullscreen = False
+    # Ambient density multiplier (Low, Medium, High)
+    density_levels = [0.6, 1.0, 1.5]
+    ambient_mult = density_levels[ambient_index]
     
     highscore_path = SAVE_FILE
     highscore = load_highscore(highscore_path)
@@ -947,6 +1065,12 @@ def run():
                     creatures.append(SeaHorse(base_w - 100, base_h//3))
                     creatures.append(Clownfish(base_w - 150, base_h*2//3))
                     start_menu = False
+                elif e.key == K_v:
+                    mods = pygame.key.get_mods()
+                    if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_ALT) and (mods & pygame.KMOD_SHIFT):
+                        if not shark:
+                            shark = SharkBoss('left' if rng.random()<0.5 else 'right', base_w, base_h, turtle)
+                            boss_cooldown = 90.0
         
         keys = pygame.key.get_pressed()
         
@@ -973,14 +1097,14 @@ def run():
 
             # Spawn environment-specific particles
             if current_env == Environment.BEACH:
-                if rng.random() < 0.6:
+                if rng.random() < 0.6 * ambient_mult:
                     x = rng.randrange(0, base_w)
                     vy = rng.uniform(120, 180)
                     particles.append(Particle(x, -5, 0, vy,
                                              base_h / vy + 1.0,
                                              (200, 200, 255), 2, "rain"))
             else:
-                if rng.random() < 0.3:
+                if rng.random() < 0.3 * ambient_mult:
                     y = rng.randrange(0, base_h)
                     vx = -rng.uniform(10, 30)
                     vy = rng.uniform(-5, 5)
@@ -1018,6 +1142,35 @@ def run():
                 c.update(dt, scroll_speed)
                 if c.x < -20:
                     creatures.remove(c)
+
+            # Boss logic
+            boss_cooldown = max(0.0, boss_cooldown - dt/1000.0)
+            if not shark and boss_cooldown <= 0.0:
+                # Very low chance per second (~1 per 5 minutes)
+                if rng.random() < (dt/1000.0) * (1.0/300.0):
+                    shark = SharkBoss('left' if rng.random()<0.5 else 'right', base_w, base_h, turtle)
+                    boss_cooldown = 90.0
+            if shark:
+                shark.update(dt, scroll_speed)
+                # Collision: shark eats turtle
+                if circle_collide(turtle.x, turtle.y, turtle.radius, shark.x, shark.y, shark.r):
+                    if turtle.health > 0:
+                        turtle.health = 0
+                        game_over = True
+                        death_message = "The shark devoured you!"
+                        play_sfx("hurt")
+                        # Gore particles
+                        for _ in range(50):
+                            vx = rng.uniform(-160, 160)
+                            vy = rng.uniform(-160, 60)
+                            particles.append(Particle(turtle.x, turtle.y, vx, vy, 1.2 + rng.random()*1.2, (180, 30, 40), rng.randint(2,3)))
+                        # Shell pieces
+                        for _ in range(12):
+                            vx = rng.uniform(-120, 120)
+                            vy = rng.uniform(-120, 40)
+                            particles.append(Particle(turtle.x, turtle.y, vx, vy, 1.6 + rng.random(), (100, 150, 120), 2))
+                if shark and shark.offscreen(base_w):
+                    shark = None
             
             for bub in list(bubbles):
                 bub.update(dt)
@@ -1102,7 +1255,7 @@ def run():
                 save_highscore(highscore_path, highscore)
         
         # Draw everything
-        draw_environment(base, current_env, int(world_offset), int(t), time_of_day)
+        draw_environment(base, current_env, int(world_offset), int(t), time_of_day, ambient_mult)
         
         # Draw particles and entities
         for p in particles:
@@ -1113,6 +1266,8 @@ def run():
             b.draw(base)
         for c in creatures:
             c.draw(base)
+        if shark:
+            shark.draw(base)
         for bub in bubbles:
             bub.draw(base)
         
