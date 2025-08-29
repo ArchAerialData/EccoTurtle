@@ -13,6 +13,9 @@ from .environment import Environment, draw_environment
 from .sound import load_or_generate_audio, play_sfx, _sfx
 
 
+DAY_LENGTH = 60.0  # seconds for a full day-night cycle
+
+
 # Graceful message if pygame isn't installed
 def _msgbox(title, text):
     try:
@@ -764,6 +767,7 @@ def run():
     highscore = load_highscore(highscore_path)
     
     t = 0.0
+    time_of_day = 6.0  # start around dawn
     
     # Spawn initial entities
     for _ in range(5):
@@ -781,6 +785,7 @@ def run():
     while True:
         dt = clock.tick(FPS)
         t += dt
+        time_of_day = (time_of_day + (dt / 1000.0) * (24.0 / DAY_LENGTH)) % 24.0
         
         for e in pygame.event.get():
             if e.type == QUIT:
@@ -974,7 +979,7 @@ def run():
                 save_highscore(highscore_path, highscore)
         
         # Draw everything
-        draw_environment(base, current_env, int(world_offset), int(t))
+        draw_environment(base, current_env, int(world_offset), int(t), time_of_day)
         
         # Draw entities
         for j in jellies:
