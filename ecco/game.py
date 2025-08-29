@@ -569,10 +569,13 @@ class Pufferfish:
 class SharkBoss:
     def __init__(self, spawn_side, base_w, base_h, target):
         self.dir = 1 if spawn_side == 'left' else -1
-        self.x = -80 if self.dir == 1 else base_w + 80
+        self.x = -120 if self.dir == 1 else base_w + 120
         self.y = target.y + random.uniform(-40, 40)
-        self.speed = 140.0  # slower to allow reaction
-        self.r = 22
+        # Start slow, ramp up to a reasonable top speed
+        self.speed = 60.0
+        self.max_speed = 110.0
+        self.accel = 35.0
+        self.r = 26
         self.life = 14.0  # seconds until despawn
         self.jaw_phase = 0.0
         self.target = target
@@ -582,8 +585,10 @@ class SharkBoss:
         dt_sec = dt / 1000.0
         # Home slightly towards target y
         dy = (self.target.y - self.y)
-        self.y += max(-120, min(120, dy)) * 0.4 * dt_sec
-        self.x += self.dir * self.speed * dt_sec - scroll_speed * 0.2 * dt_sec
+        self.y += max(-120, min(120, dy)) * 0.35 * dt_sec
+        # Accelerate up to top speed
+        self.speed = min(self.max_speed, self.speed + self.accel * dt_sec)
+        self.x += self.dir * self.speed * dt_sec - scroll_speed * 0.15 * dt_sec
         self.jaw_phase = (self.jaw_phase + dt_sec * 4) % (2*math.pi)
         self.life -= dt_sec
         if self.clamp_timer > 0:
@@ -594,49 +599,52 @@ class SharkBoss:
 
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
-        # Body with shading
-        body = pygame.Surface((70, 40), pygame.SRCALPHA)
-        pygame.draw.ellipse(body, (110, 135, 150), (4, 8, 60, 24))
-        pygame.draw.ellipse(body, (90, 110, 125), (4, 8, 60, 24), 2)
-        # Dorsal fin
-        pygame.draw.polygon(body, (100, 120, 140), [(34, 6), (40, 18), (28, 18)])
+        # Body facing RIGHT by default
+        body = pygame.Surface((120, 60), pygame.SRCALPHA)
+        # Torso
+        pygame.draw.ellipse(body, (112, 138, 155), (10, 14, 90, 32))
+        # Darker dorsal area
+        pygame.draw.ellipse(body, (92, 112, 128), (10, 12, 90, 22), 0)
+        # Dorsal fin (bigger, scary)
+        pygame.draw.polygon(body, (105, 125, 142), [(52, 6), (64, 26), (42, 24)])
         # Pectoral fin
-        pygame.draw.polygon(body, (100, 120, 140), [(24, 26), (18, 34), (30, 30)])
-        # Tail
-        pygame.draw.polygon(body, (95, 115, 135), [(62, 20), (70, 12), (70, 28)])
-        # Eye
-        pygame.draw.circle(body, (20, 20, 25), (20, 18), 2)
+        pygame.draw.polygon(body, (105, 125, 142), [(46, 36), (30, 52), (56, 44)])
+        # Tail on LEFT
+        pygame.draw.polygon(body, (95, 115, 135), [(12, 30), (2, 16), (2, 44)])
+        # Eye near front (RIGHT)
+        pygame.draw.circle(body, (20, 20, 25), (92, 28), 3)
+        pygame.draw.circle(body, (240, 240, 255), (91, 27), 1)
         # Gills
-        for gx in (26, 29, 32):
-            pygame.draw.line(body, (80, 95, 110), (gx, 20), (gx, 26), 1)
+        for gx in (80, 84, 88):
+            pygame.draw.line(body, (85, 100, 115), (gx, 28), (gx, 38), 2)
 
-        # Mouth group
-        mouth = pygame.Surface((40, 26), pygame.SRCALPHA)
-        # Open amount grows when near the turtle, closes after bite
-        near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/140.0))
+        # Mouth group at RIGHT tip
+        mouth = pygame.Surface((50, 36), pygame.SRCALPHA)
+        near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/160.0))
         if self.clamp_timer > 0:
             open_amt = 0
         else:
-            open_amt = int(10 + 10 * near * (0.5 + 0.5*math.sin(self.jaw_phase)))
-        # Interior
-        pygame.draw.polygon(mouth, (60, 10, 10), [(0,13), (36, 13-open_amt//2), (36, 13+open_amt//2)])
-        # Upper/lower jaws
-        pygame.draw.polygon(mouth, (220, 230, 240), [(0, 7), (36, 13-open_amt//2), (18, 12)])
-        pygame.draw.polygon(mouth, (220, 230, 240), [(0, 19), (36, 13+open_amt//2), (18, 14)])
-        # Teeth rows
-        for i in range(0, 36, 6):
-            pygame.draw.polygon(mouth, (250, 250, 255), [(i+3, 11), (i+1, 13), (i+5, 13)])
-            pygame.draw.polygon(mouth, (250, 250, 255), [(i+3, 15), (i+1, 13), (i+5, 13)])
+            open_amt = int(12 + 10 * near * (0.5 + 0.5*math.sin(self.jaw_phase)))
+        # Mouth interior / blood tint
+        pygame.draw.polygon(mouth, (70, 12, 12), [(0,18), (46, 18-open_amt//2), (46, 18+open_amt//2)])
+        # Upper jaw
+        pygame.draw.polygon(mouth, (225, 235, 245), [(0, 10), (46, 18-open_amt//2), (24, 16)])
+        # Lower jaw
+        pygame.draw.polygon(mouth, (225, 235, 245), [(0, 26), (46, 18+open_amt//2), (24, 20)])
+        # Teeth top/bottom
+        for i in range(4, 46, 7):
+            pygame.draw.polygon(mouth, (255,255,255), [(i, 16), (i-2, 18), (i+2, 18)])
+            pygame.draw.polygon(mouth, (255,255,255), [(i, 20), (i-2, 18), (i+2, 18)])
 
-        # Compose facing based on direction
-        if self.dir == 1:
-            surf.blit(body, (cx-35, cy-20))
-            surf.blit(mouth, (cx-10, cy-13))
+        # Compose facing
+        if self.dir == 1:  # moving right, face right
+            surf.blit(body, (cx-60, cy-30))
+            surf.blit(mouth, (cx+20, cy-18))
         else:
             body = pygame.transform.flip(body, True, False)
             mouth = pygame.transform.flip(mouth, True, False)
-            surf.blit(body, (cx-35, cy-20))
-            surf.blit(mouth, (cx-26, cy-13))
+            surf.blit(body, (cx-60, cy-30))
+            surf.blit(mouth, (cx-70, cy-18))
 
 class Particle:
     def __init__(self, x, y, vx, vy, life, color, radius=2, kind="dot"):
@@ -1080,6 +1088,8 @@ def run():
                     creatures = []
                     bubbles = []
                     particles = []
+                    shark = None
+                    boss_cooldown = 30.0
                     score = 0
                     streak = 0
                     distance_traveled = 0
