@@ -10,7 +10,9 @@ from .environment import Environment
 from .config import (MUSIC_BEACH_FILE, MUSIC_CORAL_FILE, MUSIC_REEF_FILE,
                      MUSIC_OCEAN_FILE, MUSIC_RIG_FILE,
                      SFX_DASH_FILE, SFX_EAT_FILE,
-                     SFX_HURT_FILE, SFX_POWERUP_FILE)
+                     SFX_HURT_FILE, SFX_POWERUP_FILE,
+                     AMBIENT_WAVES_FILE, AMBIENT_GULLS_FILE,
+                     AMBIENT_HUM_FILE)
 
 
 def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100):
@@ -155,7 +157,65 @@ def write_wav_synth_beep(path, freq=880, ms=150, sample_rate=44100,
         wf.writeframes(data)
 
 
+def write_wav_ambient_waves(path, duration=4, sample_rate=44100):
+    samples = int(sample_rate * duration)
+    data = bytearray()
+    for i in range(samples):
+        t = i / sample_rate
+        slow = math.sin(2 * math.pi * 0.25 * t) * 0.5 + 0.5
+        val = (math.sin(2 * math.pi * 0.5 * t) +
+               0.5 * math.sin(2 * math.pi * 0.8 * t)) * 0.3
+        noise = (random.random() * 2 - 1) * 0.02
+        sample = (val + noise) * slow
+        sample = max(-1.0, min(1.0, sample))
+        data += struct.pack('<h', int(sample * 32767))
+    with wave.open(path, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(data)
+
+
+def write_wav_ambient_gulls(path, duration=4, sample_rate=44100):
+    samples = int(sample_rate * duration)
+    data = bytearray()
+    period = int(sample_rate * 2)
+    chirp = int(sample_rate * 0.5)
+    for i in range(samples):
+        t = i / sample_rate
+        cycle = i % period
+        sample = 0.0
+        if cycle < chirp:
+            env = 1.0 - (cycle / chirp)
+            sample = (math.sin(2 * math.pi * 1000 * t) * 0.3 +
+                      math.sin(2 * math.pi * 1500 * t) * 0.2) * env
+        data += struct.pack('<h', int(max(-1.0, min(1.0, sample)) * 32767))
+    with wave.open(path, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(data)
+
+
+def write_wav_ambient_hum(path, duration=4, sample_rate=44100):
+    samples = int(sample_rate * duration)
+    data = bytearray()
+    for i in range(samples):
+        t = i / sample_rate
+        sample = (math.sin(2 * math.pi * 60 * t) +
+                  0.5 * math.sin(2 * math.pi * 120 * t)) * 0.3
+        data += struct.pack('<h', int(max(-1.0, min(1.0, sample)) * 32767))
+    with wave.open(path, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(data)
+
+
 _sfx = {}
+_ambient_sounds = {}
+_ambient_channels = {}
+_active_ambient = set()
 
 def play_sfx(name):
     ch = pygame.mixer.find_channel()
@@ -170,6 +230,12 @@ def load_or_generate_audio():
         Environment.ROCKY_REEF: str(MUSIC_REEF_FILE),
         Environment.OCEAN_FLOOR: str(MUSIC_OCEAN_FILE),
         Environment.OIL_RIG: str(MUSIC_RIG_FILE),
+    }
+
+    ambient_map = {
+        'waves': str(AMBIENT_WAVES_FILE),
+        'gulls': str(AMBIENT_GULLS_FILE),
+        'hum': str(AMBIENT_HUM_FILE),
     }
 
     eat = str(SFX_EAT_FILE)
@@ -199,4 +265,43 @@ def load_or_generate_audio():
     if not os.path.exists(powerup):
         write_wav_synth_beep(powerup, freq=440, ms=500, shape="powerup")
 
-    return music_map, eat, hurt, dash, powerup
+    # Ambient loops
+    if not os.path.exists(ambient_map['waves']):
+        write_wav_ambient_waves(ambient_map['waves'])
+    if not os.path.exists(ambient_map['gulls']):
+        write_wav_ambient_gulls(ambient_map['gulls'])
+    if not os.path.exists(ambient_map['hum']):
+        write_wav_ambient_hum(ambient_map['hum'])
+
+    for name, path in ambient_map.items():
+        _ambient_sounds[name] = pygame.mixer.Sound(path)
+
+    return music_map, ambient_map, eat, hurt, dash, powerup
+
+
+def update_ambient(env, fade_ms=2000):
+    desired = set()
+    if env == Environment.BEACH:
+        desired = {'waves', 'gulls'}
+    elif env == Environment.OIL_RIG:
+        desired = {'waves', 'hum'}
+    else:
+        desired = {'waves'}
+
+    # Fade out tracks no longer needed
+    for name in _active_ambient - desired:
+        ch = _ambient_channels.get(name)
+        if ch:
+            ch.fadeout(fade_ms)
+
+    # Fade in new tracks
+    for name in desired - _active_ambient:
+        snd = _ambient_sounds.get(name)
+        if snd:
+            ch = pygame.mixer.find_channel(True)
+            if ch:
+                ch.play(snd, loops=-1, fade_ms=fade_ms)
+                _ambient_channels[name] = ch
+
+    _active_ambient.clear()
+    _active_ambient.update(desired)

@@ -38,6 +38,7 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
                                  (dx-10, h+5), (dx-7, h-5), (dx-15, h-12),
                                  (dx-5, h-15)])
 
+
         def _details():
             for x in range(0, w, 50):
                 dx = x - (fg_offset % 50)
@@ -52,6 +53,7 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
             pygame.draw.polygon(midground, (50, 55, 60),
                                 [(dx - 20, h), (dx + 20, h),
                                  (dx + 10, h - 90), (dx - 10, h - 90)])
+
 
         def _details():
             for x in range(0, w, 45):
@@ -76,6 +78,7 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
                 pygame.draw.line(midground, (255, 100, 50),
                                  (dx, h - 10), (bx, by), 3)
 
+
         def _details():
             for x in range(0, w, 90):
                 dx = x - (fg_offset % 90)
@@ -84,6 +87,7 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
                 pygame.draw.polygon(surf, (220, 100, 100),
                                     [(dx+12, fy+3), (dx+16, fy), (dx+16, fy+6)])
 
+
     elif env_type == Environment.BEACH:
         background.fill((100, 180, 220))
         for x in range(0, w, 30):
@@ -91,13 +95,13 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
             pygame.draw.line(background, (150, 210, 240), (sx, 0), (sx - 20, h), 2)
         pygame.draw.circle(background, (255, 255, 200), (w-40, 40), 20)
         for cx in range(0, w, 100):
+
             pygame.draw.ellipse(background, (250, 250, 255), (cx-20, 10, 60, 20))
         pygame.draw.rect(midground, (230, 210, 170), (0, h - 30, w, 30))
 
         def _details():
             for x in range(0, w + 40, 40):
                 dx = x - (fg_offset % 40)
-                pygame.draw.circle(surf, (255, 230, 200), (dx, h - 15), 3)
 
     elif env_type == Environment.OIL_RIG:
         background.fill((30, 40, 45))
@@ -107,6 +111,7 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
             for y in range(40, h, 40):
                 pygame.draw.line(midground, (70, 70, 70), (dx - 20, y), (dx + 20, y - 20), 3)
         for x in range(0, w + 80, 80):
+
             dx = x - (mid_offset % 80) + int(math.sin(time_val * 0.0005 + x) * 20)
             pygame.draw.ellipse(midground, (20, 10, 30), (dx - 30, h - 60, 60, 20))
 
@@ -128,3 +133,4 @@ def draw_environment(surf, env_type, bg_offset, mid_offset, fg_offset, time_val)
     surf.blit(midground, (0, 0))
     surf.blit(foreground, (0, 0))
     _details()
+
