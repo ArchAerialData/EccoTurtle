@@ -651,25 +651,33 @@ class SharkBoss:
             near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/160.0))
             open_px = int(16 + 14 * near * (0.5 + 0.5 * math.sin(self.jaw_phase)))
 
-        # Mouth cavity (dark) and lips
-        upper_joint = (26, 16)
-        lower_joint = (26, 24)
-        tip_up = (54, 20 - open_px//2)
-        tip_dn = (54, 20 + open_px//2)
-        pygame.draw.polygon(mouth, gum, [(2, 20), tip_up, tip_dn])
-        # Upper/Lower jaws (white belly color)
-        pygame.draw.polygon(mouth, belly, [(2, 10), tip_up, upper_joint])
-        pygame.draw.polygon(mouth, belly, [(2, 30), tip_dn, lower_joint])
-        # Teeth rows (offset so they don't form diamonds)
-        for i in range(8, 52, 9):
-            # Top tooth: base along upper lip, apex toward center
-            pygame.draw.polygon(mouth, (255,255,255), [(i-2, 14), (i+2, 14), (i, 19)])
-        for i in range(12, 52, 9):
-            # Bottom tooth: base along lower lip, apex toward center
-            pygame.draw.polygon(mouth, (255,255,255), [(i-2, 26), (i+2, 26), (i, 21)])
-        # Outline mouth edges for crisp pixel look
-        pygame.draw.lines(mouth, outline, False, [(2,10), upper_joint, tip_up], 1)
-        pygame.draw.lines(mouth, outline, False, [(2,30), lower_joint, tip_dn], 1)
+        # Triangular mouth that narrows inward toward the body
+        lip_x = 52
+        y_mid = 20
+        y_top = y_mid - open_px // 2
+        y_bot = y_mid + open_px // 2
+        tip_x = max(10, lip_x - open_px)  # deeper tip as mouth opens
+
+        # Dark cavity wedge
+        pygame.draw.polygon(mouth, gum, [(lip_x, y_top), (lip_x, y_bot), (tip_x, y_mid)])
+        # Jaw edges (belly color) to sell the 8-bit look
+        pygame.draw.polygon(mouth, belly, [(lip_x, y_top), (tip_x + 8, y_top + 2), (tip_x + 2, y_mid)])
+        pygame.draw.polygon(mouth, belly, [(lip_x, y_bot), (tip_x + 8, y_bot - 2), (tip_x + 2, y_mid)])
+
+        # Teeth along the vertical lip, pointing inward (staggered rows)
+        ty = y_top + 2
+        while ty + 6 < y_bot - 1:
+            pygame.draw.polygon(mouth, (255,255,255), [(lip_x, ty), (lip_x-5, ty+3), (lip_x, ty+6)])
+            ty += 8
+        ty = y_top + 6
+        while ty + 6 < y_bot - 1:
+            pygame.draw.polygon(mouth, (255,255,255), [(lip_x, ty), (lip_x-5, ty-3), (lip_x, ty-6)])
+            ty += 8
+
+        # Outlines for crisp pixel edges
+        pygame.draw.line(mouth, outline, (lip_x, y_top), (tip_x, y_mid), 1)
+        pygame.draw.line(mouth, outline, (lip_x, y_bot), (tip_x, y_mid), 1)
+        pygame.draw.line(mouth, outline, (lip_x, y_top), (lip_x, y_bot), 1)
 
         # Compose facing
         if self.dir == 1:  # moving right, face right
