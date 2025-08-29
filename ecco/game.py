@@ -10,7 +10,7 @@ from pygame.locals import *
 from .config import (TITLE, DEFAULT_W, DEFAULT_H, SCALE, FPS,
                      POWERUP_THRESHOLD, POWERUP_DURATION, SAVE_FILE)
 from .environment import Environment, draw_environment
-from .sound import load_or_generate_audio, play_sfx, _sfx
+from .sound import load_or_generate_audio, play_sfx, _sfx, update_ambient
 
 
 DAY_LENGTH = 60.0  # seconds for a full day-night cycle
@@ -702,8 +702,9 @@ def run():
     title_font = pygame.font.SysFont("consolas", 22, bold=True)
     
     # Audio
-    music_map, eat, hurt, dash, powerup = load_or_generate_audio()
+    music_map, _ambient_map, eat, hurt, dash, powerup = load_or_generate_audio()
     pygame.mixer.music.load(music_map[Environment.BEACH])
+    update_ambient(Environment.BEACH)
     
     _sfx["eat"] = pygame.mixer.Sound(eat)
     _sfx["hurt"] = pygame.mixer.Sound(hurt)
@@ -746,12 +747,13 @@ def run():
     bubbles = []
     
     # Environment management
-    environments = [Environment.BEACH, Environment.CORAL_COVE, Environment.ROCKY_REEF, 
+    environments = [Environment.BEACH, Environment.CORAL_COVE, Environment.ROCKY_REEF,
                    Environment.OCEAN_FLOOR, Environment.OIL_RIG]
     current_env_index = 0
     current_env = environments[current_env_index]
     env_transition = 0
     distance_traveled = 0
+    update_ambient(current_env)
     
     # Side-scrolling variables
     scroll_speed = 30  # pixels per second
@@ -835,6 +837,7 @@ def run():
                     current_env = environments[current_env_index]
                     pygame.mixer.music.load(music_map[current_env])
                     pygame.mixer.music.play(-1)
+                    update_ambient(current_env)
                     
                     # Respawn entities
                     for _ in range(5):
@@ -863,6 +866,7 @@ def run():
                 current_env = environments[current_env_index]
                 pygame.mixer.music.load(music_map[current_env])
                 pygame.mixer.music.play(-1)
+                update_ambient(current_env)
                 # spawn fresh food in new environment
                 for _ in range(3):
                     jellies.append(

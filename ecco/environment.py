@@ -11,11 +11,13 @@ def _lerp(a, b, t):
     return a + (b - a) * t
 
 
+
 def _lerp_color(c1, c2, t):
     return tuple(int(_lerp(c1[i], c2[i], t)) for i in range(3))
 
 
 def draw_environment(surf, env_type, offset, time_val, time_of_day):
+
     w, h = surf.get_width(), surf.get_height()
 
     # --- Time of day colour selection ---
@@ -61,69 +63,85 @@ def draw_environment(surf, env_type, offset, time_val, time_of_day):
     # clear previous frame to avoid artifacts and apply base water colour
     surf.fill(water_color)
 
+    # Create separate layers for parallax scrolling
+    background = pygame.Surface((w, h), pygame.SRCALPHA)
+    midground = pygame.Surface((w, h), pygame.SRCALPHA)
+    foreground = pygame.Surface((w, h), pygame.SRCALPHA)
+
     if env_type == Environment.OCEAN_FLOOR:
         for y in range(h):
             depth = y / h
+
             line_col = _lerp_color(water_color,
                                    (max(0, water_color[0] - 30),
                                     max(0, water_color[1] - 50),
                                     max(0, water_color[2] - 70)), depth)
             pygame.draw.line(surf, line_col, (0, y), (w, y))
+
         for x in range(0, w + 40, 40):
-            dx = x - (offset % 40)
-            height = 10 + int(math.sin((x + offset) * 0.02) * 5)
-            pygame.draw.ellipse(surf, (100, 90, 60),
+            dx = x - (mid_offset % 40)
+            height = 10 + int(math.sin((x + mid_offset) * 0.02) * 5)
+            pygame.draw.ellipse(midground, (100, 90, 60),
                                 (dx - 20, h - height, 40, height * 2))
-        # Starfish and seaweed
         for x in range(0, w, 80):
-            dx = x - (offset % 80)
-            pygame.draw.polygon(surf, (180, 120, 50),
+            dx = x - (fg_offset % 80)
+            pygame.draw.polygon(foreground, (180, 120, 50),
                                 [(dx, h-25), (dx+5, h-15), (dx+15, h-12),
                                  (dx+7, h-5), (dx+10, h+5), (dx, h),
                                  (dx-10, h+5), (dx-7, h-5), (dx-15, h-12),
                                  (dx-5, h-15)])
-        for x in range(0, w, 50):
-            dx = x - (offset % 50)
-            pygame.draw.line(surf, (20, 80, 40), (dx, h-30), (dx, h-10), 2)
+
+
+        def _details():
+            for x in range(0, w, 50):
+                dx = x - (fg_offset % 50)
+                pygame.draw.line(surf, (20, 80, 40), (dx, h-30), (dx, h-10), 2)
 
     elif env_type == Environment.ROCKY_REEF:
         for x in range(0, w + 60, 60):
-            dx = x - (offset % 60)
-            pygame.draw.rect(surf, (60, 65, 70),
+            dx = x - (mid_offset % 60)
+            pygame.draw.rect(midground, (60, 65, 70),
                              (dx - 15, h - 80, 30, 80))
-            pygame.draw.polygon(surf, (50, 55, 60),
+            pygame.draw.polygon(midground, (50, 55, 60),
                                 [(dx - 20, h), (dx + 20, h),
                                  (dx + 10, h - 90), (dx - 10, h - 90)])
-        # Kelp swaying between the rocks
-        for x in range(0, w, 45):
-            dx = x - (offset % 45)
-            sway = int(math.sin(time_val*0.002 + x) * 5)
-            pygame.draw.line(surf, (30, 100, 60), (dx, h-60), (dx+sway, h-20), 3)
+
+
+        def _details():
+            for x in range(0, w, 45):
+                dx = x - (fg_offset % 45)
+                sway = int(math.sin(time_val*0.002 + x) * 5)
+                pygame.draw.line(surf, (30, 100, 60), (dx, h-60), (dx+sway, h-20), 3)
 
     elif env_type == Environment.CORAL_COVE:
         for y in range(h):
             depth = y / h
+
             line_col = _lerp_color(water_color,
                                    (water_color[0] + 30,
                                     max(0, water_color[1] - 40),
                                     max(0, water_color[2] - 30)), depth)
             pygame.draw.line(surf, line_col, (0, y), (w, y))
+    
         for x in range(0, w + 50, 50):
-            dx = x - (offset % 50)
-            pygame.draw.circle(surf, (255, 120, 150), (dx, h - 20), 15)
-            pygame.draw.circle(surf, (255, 140, 170), (dx, h - 20), 12)
+            dx = x - (mid_offset % 50)
+            pygame.draw.circle(midground, (255, 120, 150), (dx, h - 20), 15)
+            pygame.draw.circle(midground, (255, 140, 170), (dx, h - 20), 12)
             for branch in range(-2, 3):
                 by = h - 40 - abs(branch) * 10
                 bx = dx + branch * 8
-                pygame.draw.line(surf, (255, 100, 50),
+                pygame.draw.line(midground, (255, 100, 50),
                                  (dx, h - 10), (bx, by), 3)
-        # Small reef fish
-        for x in range(0, w, 90):
-            dx = x - (offset % 90)
-            fy = h//2 + int(math.sin(time_val*0.003 + x) * 20)
-            pygame.draw.ellipse(surf, (200, 80, 80), (dx, fy, 12, 6))
-            pygame.draw.polygon(surf, (220, 100, 100),
-                                [(dx+12, fy+3), (dx+16, fy), (dx+16, fy+6)])
+
+
+        def _details():
+            for x in range(0, w, 90):
+                dx = x - (fg_offset % 90)
+                fy = h//2 + int(math.sin(time_val*0.003 + x) * 20)
+                pygame.draw.ellipse(surf, (200, 80, 80), (dx, fy, 12, 6))
+                pygame.draw.polygon(surf, (220, 100, 100),
+                                    [(dx+12, fy+3), (dx+16, fy), (dx+16, fy+6)])
+
 
     elif env_type == Environment.BEACH:
         pygame.draw.rect(surf, sky_color, (0, 0, w, h//3))
@@ -150,12 +168,14 @@ def draw_environment(surf, env_type, offset, time_val, time_of_day):
                 surf.blit(cloud, (cx - 20, 10))
 
     elif env_type == Environment.OIL_RIG:
+
         for x in range(0, w + 120, 120):
-            dx = x - (offset % 120)
-            pygame.draw.rect(surf, (80, 80, 80), (dx - 5, 0, 10, h))
+            dx = x - (mid_offset % 120)
+            pygame.draw.rect(midground, (80, 80, 80), (dx - 5, 0, 10, h))
             for y in range(40, h, 40):
-                pygame.draw.line(surf, (70, 70, 70), (dx - 20, y), (dx + 20, y - 20), 3)
+                pygame.draw.line(midground, (70, 70, 70), (dx - 20, y), (dx + 20, y - 20), 3)
         for x in range(0, w + 80, 80):
+
             dx = x - (offset % 80) + int(math.sin(time_val * 0.0005 + x) * 20)
             pygame.draw.ellipse(surf, (20, 10, 30), (dx - 30, h - 60, 60, 20))
         # Suspended cables and oil droplets
