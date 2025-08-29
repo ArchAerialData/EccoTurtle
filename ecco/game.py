@@ -279,6 +279,8 @@ class Turtle:
             pygame.draw.lines(surf, outline, True, [upper_base, upper_tip, lower_tip, lower_base], 1)
 
 class Jelly:
+    _bell_cache = {}
+
     def __init__(self, x, y):
         self.x, self.y = float(x), float(y)
         self.r = 6 + random.randint(0, 2)
@@ -303,24 +305,33 @@ class Jelly:
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
         r = self.r
-        # High-detail translucent bell using an alpha surface
-        size = r * 4
-        js = pygame.Surface((size, size), pygame.SRCALPHA)
-        jcx, jcy = size // 2, size // 2
-        # Radial gradient
-        for rr in range(r, 0, -1):
-            a = int(90 + 140 * (rr / r))
-            col = (230, 200, 255, a)
-            pygame.draw.circle(js, col, (jcx, jcy), rr)
-        # Rim highlight
-        pygame.draw.circle(js, (255, 255, 255, 200), (jcx, jcy - 1), max(1, r - 2), 1)
-        # Inner nucleus pulsating
-        core_r = max(1, int(r * (0.35 + 0.15 * math.sin(self.phase * 3))))
-        pygame.draw.circle(js, (255, 255, 180, 180), (jcx, jcy - 2), core_r)
-        # Small crown
-        pygame.draw.circle(js, (240, 80, 120, 220), (jcx, jcy - r), max(1, r // 3))
-        # Blit bell
+        # High-detail translucent bell using a cached alpha surface per radius
+        bell = Jelly._bell_cache.get(r)
+        if bell is None:
+            size = r * 4
+            js = pygame.Surface((size, size), pygame.SRCALPHA)
+            jcx, jcy = size // 2, size // 2
+            # Radial gradient for the bell
+            for rr in range(r, 0, -1):
+                a = int(90 + 140 * (rr / r))
+                col = (230, 200, 255, a)
+                pygame.draw.circle(js, col, (jcx, jcy), rr)
+            # Rim highlight (static)
+            pygame.draw.circle(js, (255, 255, 255, 200), (jcx, jcy - 1), max(1, r - 2), 1)
+            # Cache converted surface for faster blits
+            try:
+                js = js.convert_alpha()
+            except Exception:
+                pass
+            bell = (js, jcx, jcy)
+            Jelly._bell_cache[r] = bell
+        js, jcx, jcy = bell
         surf.blit(js, (cx - jcx, cy - jcy))
+
+        # Animated inner nucleus and small crown (cheap to draw each frame)
+        core_r = max(1, int(r * (0.35 + 0.15 * math.sin(self.phase * 3))))
+        pygame.draw.circle(surf, (255, 255, 180), (cx, cy - 2), core_r)
+        pygame.draw.circle(surf, (240, 80, 120), (cx, cy - r), max(1, r // 3))
 
         # Flowing, segmented tentacles with curvature
         tentacle_count = 6

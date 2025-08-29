@@ -12,7 +12,8 @@ from .config import (MUSIC_BEACH_FILE, MUSIC_CORAL_FILE, MUSIC_REEF_FILE,
                      SFX_DASH_FILE, SFX_EAT_FILE,
                      SFX_HURT_FILE, SFX_POWERUP_FILE,
                      AMBIENT_WAVES_FILE, AMBIENT_GULLS_FILE,
-                     AMBIENT_HUM_FILE)
+                     AMBIENT_HUM_FILE,
+                     ASSET_DIR)
 
 
 def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100):
@@ -232,6 +233,20 @@ def load_or_generate_audio():
         Environment.OIL_RIG: str(MUSIC_RIG_FILE),
     }
 
+    # Fast startup: if target track is missing, map to existing fallback
+    # tracks rather than generating new ones on first boot.
+    tune_fallback = str(ASSET_DIR / 'turtle_tune.wav')
+    deep_fallback = str(ASSET_DIR / 'turtle_deep_synth.wav')
+
+    def ensure_track(path, fallback):
+        return path if os.path.exists(path) else (fallback if os.path.exists(fallback) else path)
+
+    music_map[Environment.BEACH] = ensure_track(music_map[Environment.BEACH], tune_fallback)
+    music_map[Environment.CORAL_COVE] = ensure_track(music_map[Environment.CORAL_COVE], tune_fallback)
+    music_map[Environment.ROCKY_REEF] = ensure_track(music_map[Environment.ROCKY_REEF], tune_fallback)
+    music_map[Environment.OCEAN_FLOOR] = ensure_track(music_map[Environment.OCEAN_FLOOR], deep_fallback)
+    music_map[Environment.OIL_RIG] = ensure_track(music_map[Environment.OIL_RIG], deep_fallback)
+
     ambient_map = {
         'waves': str(AMBIENT_WAVES_FILE),
         'gulls': str(AMBIENT_GULLS_FILE),
@@ -243,7 +258,7 @@ def load_or_generate_audio():
     dash = str(SFX_DASH_FILE)
     powerup = str(SFX_POWERUP_FILE)
 
-    # Generate music for each environment if missing with varied moods
+    # Generate music for each environment if still missing (no fallback)
     if not os.path.exists(music_map[Environment.BEACH]):
         write_wav_deep_synth_melody(music_map[Environment.BEACH], tempo_bpm=120)
     if not os.path.exists(music_map[Environment.CORAL_COVE]):
