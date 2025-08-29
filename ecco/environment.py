@@ -20,6 +20,10 @@ def draw_environment(surf, env_type, offset, time_val, time_of_day):
 
     w, h = surf.get_width(), surf.get_height()
 
+    # Parallax offsets for mid/foreground layers (relative to world offset)
+    mid_offset = int(offset * 0.6)
+    fg_offset = int(offset * 0.85)
+
     # --- Time of day colour selection ---
     t = time_of_day % 24.0
     day_sky = (135, 206, 235)
@@ -185,6 +189,11 @@ def draw_environment(surf, env_type, offset, time_val, time_of_day):
         if int(time_val*0.002) % 2 == 0:
             drop_x = (time_val//20 % w)
             pygame.draw.circle(surf, (10, 10, 20), (int(drop_x), h-40), 3)
+
+    # Composite layers onto the base surface
+    surf.blit(background, (0, 0))
+    surf.blit(midground, (0, 0))
+    surf.blit(foreground, (0, 0))
 
     # --- Night overlay and moon ---
     if overlay_alpha > 0:
