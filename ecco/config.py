@@ -20,6 +20,11 @@ SFX_HURT_FILE = ASSET_DIR / 'sfx_hurt_synth.wav'
 SFX_DASH_FILE = ASSET_DIR / 'sfx_dash_synth.wav'
 SFX_POWERUP_FILE = ASSET_DIR / 'sfx_powerup_synth.wav'
 
+# Ambient loops
+AMBIENT_WAVES_FILE = ASSET_DIR / 'ambient_waves.wav'
+AMBIENT_GULLS_FILE = ASSET_DIR / 'ambient_gulls.wav'
+AMBIENT_HUM_FILE = ASSET_DIR / 'ambient_hum.wav'
+
 SAVE_FILE = DATA_DIR / 'tide_highscore.json'
 
 POWERUP_THRESHOLD = 15
