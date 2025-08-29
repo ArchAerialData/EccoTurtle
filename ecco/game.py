@@ -651,18 +651,25 @@ class SharkBoss:
             near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/160.0))
             open_px = int(16 + 14 * near * (0.5 + 0.5 * math.sin(self.jaw_phase)))
 
-        # Mouth cavity
-        pygame.draw.polygon(mouth, gum, [(2, 20), (54, 20 - open_px//2), (54, 20 + open_px//2)])
+        # Mouth cavity (dark) and lips
+        upper_joint = (26, 16)
+        lower_joint = (26, 24)
+        tip_up = (54, 20 - open_px//2)
+        tip_dn = (54, 20 + open_px//2)
+        pygame.draw.polygon(mouth, gum, [(2, 20), tip_up, tip_dn])
         # Upper/Lower jaws (white belly color)
-        pygame.draw.polygon(mouth, belly, [(2, 10), (54, 20 - open_px//2), (26, 16)])
-        pygame.draw.polygon(mouth, belly, [(2, 30), (54, 20 + open_px//2), (26, 24)])
-        # Teeth rows
-        for i in range(6, 54, 8):
-            pygame.draw.polygon(mouth, (255,255,255), [(i, 16), (i-3, 20), (i+3, 20)])
-            pygame.draw.polygon(mouth, (255,255,255), [(i, 24), (i-3, 20), (i+3, 20)])
-        # Outline mouth edges for 8‑bit contrast
-        pygame.draw.lines(mouth, outline, False, [(2,10),(26,16),(54,20-open_px//2)], 1)
-        pygame.draw.lines(mouth, outline, False, [(2,30),(26,24),(54,20+open_px//2)], 1)
+        pygame.draw.polygon(mouth, belly, [(2, 10), tip_up, upper_joint])
+        pygame.draw.polygon(mouth, belly, [(2, 30), tip_dn, lower_joint])
+        # Teeth rows (offset so they don't form diamonds)
+        for i in range(8, 52, 9):
+            # Top tooth: base along upper lip, apex toward center
+            pygame.draw.polygon(mouth, (255,255,255), [(i-2, 14), (i+2, 14), (i, 19)])
+        for i in range(12, 52, 9):
+            # Bottom tooth: base along lower lip, apex toward center
+            pygame.draw.polygon(mouth, (255,255,255), [(i-2, 26), (i+2, 26), (i, 21)])
+        # Outline mouth edges for crisp pixel look
+        pygame.draw.lines(mouth, outline, False, [(2,10), upper_joint, tip_up], 1)
+        pygame.draw.lines(mouth, outline, False, [(2,30), lower_joint, tip_dn], 1)
 
         # Compose facing
         if self.dir == 1:  # moving right, face right
