@@ -569,46 +569,74 @@ class Pufferfish:
 class SharkBoss:
     def __init__(self, spawn_side, base_w, base_h, target):
         self.dir = 1 if spawn_side == 'left' else -1
-        self.x = -60 if self.dir == 1 else base_w + 60
+        self.x = -80 if self.dir == 1 else base_w + 80
         self.y = target.y + random.uniform(-40, 40)
-        self.speed = 220.0
-        self.r = 18
-        self.life = 10.0  # seconds until despawn
+        self.speed = 140.0  # slower to allow reaction
+        self.r = 22
+        self.life = 14.0  # seconds until despawn
         self.jaw_phase = 0.0
         self.target = target
+        self.clamp_timer = 0.0  # mouth closed after bite
 
     def update(self, dt, scroll_speed):
         dt_sec = dt / 1000.0
         # Home slightly towards target y
         dy = (self.target.y - self.y)
-        self.y += max(-120, min(120, dy)) * 0.6 * dt_sec
+        self.y += max(-120, min(120, dy)) * 0.4 * dt_sec
         self.x += self.dir * self.speed * dt_sec - scroll_speed * 0.2 * dt_sec
-        self.jaw_phase = (self.jaw_phase + dt_sec * 6) % (2*math.pi)
+        self.jaw_phase = (self.jaw_phase + dt_sec * 4) % (2*math.pi)
         self.life -= dt_sec
+        if self.clamp_timer > 0:
+            self.clamp_timer -= dt_sec
 
     def offscreen(self, base_w):
         return (self.x < -100 and self.dir == -1) or (self.x > base_w + 100 and self.dir == 1) or self.life <= 0
 
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
-        # Body
-        body_color = (120, 140, 160)
-        pygame.draw.ellipse(surf, body_color, (cx - 28, cy - 12, 56, 24))
+        # Body with shading
+        body = pygame.Surface((70, 40), pygame.SRCALPHA)
+        pygame.draw.ellipse(body, (110, 135, 150), (4, 8, 60, 24))
+        pygame.draw.ellipse(body, (90, 110, 125), (4, 8, 60, 24), 2)
+        # Dorsal fin
+        pygame.draw.polygon(body, (100, 120, 140), [(34, 6), (40, 18), (28, 18)])
+        # Pectoral fin
+        pygame.draw.polygon(body, (100, 120, 140), [(24, 26), (18, 34), (30, 30)])
         # Tail
-        tail_dir = -1 if self.dir == 1 else 1
-        pygame.draw.polygon(surf, (100, 120, 140), [(cx + 28*self.dir, cy), (cx + 38*self.dir, cy-10), (cx + 38*self.dir, cy+10)])
-        # Fin
-        pygame.draw.polygon(surf, (100, 120, 140), [(cx, cy-14), (cx+6*self.dir, cy-2), (cx-6*self.dir, cy-2)])
-        # Jaw open/close
-        open_amt = 6 + int(6 * (0.5 + 0.5*math.sin(self.jaw_phase)))
-        snout_x = cx - 20*self.dir
-        upper = [(snout_x, cy - 6), (cx - 4*self.dir, cy - 2), (cx - 4*self.dir, cy - 2 - open_amt//2)]
-        lower = [(snout_x, cy + 6), (cx - 4*self.dir, cy + 2), (cx - 4*self.dir, cy + 2 + open_amt//2)]
-        pygame.draw.polygon(surf, (230, 230, 240), upper)
-        pygame.draw.polygon(surf, (230, 230, 240), lower)
-        # Teeth
-        for t in range(-open_amt//2, open_amt//2+1, 4):
-            pygame.draw.line(surf, (240,240,255), (cx - 6*self.dir, cy + t), (cx - 10*self.dir, cy + t + (2 if t<0 else -2)), 1)
+        pygame.draw.polygon(body, (95, 115, 135), [(62, 20), (70, 12), (70, 28)])
+        # Eye
+        pygame.draw.circle(body, (20, 20, 25), (20, 18), 2)
+        # Gills
+        for gx in (26, 29, 32):
+            pygame.draw.line(body, (80, 95, 110), (gx, 20), (gx, 26), 1)
+
+        # Mouth group
+        mouth = pygame.Surface((40, 26), pygame.SRCALPHA)
+        # Open amount grows when near the turtle, closes after bite
+        near = max(0.0, min(1.0, 1.0 - abs(self.target.y - self.y)/140.0))
+        if self.clamp_timer > 0:
+            open_amt = 0
+        else:
+            open_amt = int(10 + 10 * near * (0.5 + 0.5*math.sin(self.jaw_phase)))
+        # Interior
+        pygame.draw.polygon(mouth, (60, 10, 10), [(0,13), (36, 13-open_amt//2), (36, 13+open_amt//2)])
+        # Upper/lower jaws
+        pygame.draw.polygon(mouth, (220, 230, 240), [(0, 7), (36, 13-open_amt//2), (18, 12)])
+        pygame.draw.polygon(mouth, (220, 230, 240), [(0, 19), (36, 13+open_amt//2), (18, 14)])
+        # Teeth rows
+        for i in range(0, 36, 6):
+            pygame.draw.polygon(mouth, (250, 250, 255), [(i+3, 11), (i+1, 13), (i+5, 13)])
+            pygame.draw.polygon(mouth, (250, 250, 255), [(i+3, 15), (i+1, 13), (i+5, 13)])
+
+        # Compose facing based on direction
+        if self.dir == 1:
+            surf.blit(body, (cx-35, cy-20))
+            surf.blit(mouth, (cx-10, cy-13))
+        else:
+            body = pygame.transform.flip(body, True, False)
+            mouth = pygame.transform.flip(mouth, True, False)
+            surf.blit(body, (cx-35, cy-20))
+            surf.blit(mouth, (cx-26, cy-13))
 
 class Particle:
     def __init__(self, x, y, vx, vy, life, color, radius=2, kind="dot"):
@@ -918,6 +946,14 @@ def run():
     _sfx["hurt"] = pygame.mixer.Sound(hurt)
     _sfx["dash"] = pygame.mixer.Sound(dash)
     _sfx["powerup"] = pygame.mixer.Sound(powerup)
+    # Tame the harsh "beep" feel by lowering/normalizing SFX volumes
+    try:
+        _sfx["eat"].set_volume(0.25)
+        _sfx["dash"].set_volume(0.18)
+        _sfx["powerup"].set_volume(0.22)
+        _sfx["hurt"].set_volume(0.15)
+    except Exception:
+        pass
     
     # Main menu
     volume = 0.35
@@ -1159,6 +1195,7 @@ def run():
                         game_over = True
                         death_message = "The shark devoured you!"
                         play_sfx("hurt")
+                        shark.clamp_timer = 1.0  # jaws clamp shut after bite
                         # Gore particles
                         for _ in range(50):
                             vx = rng.uniform(-160, 160)
