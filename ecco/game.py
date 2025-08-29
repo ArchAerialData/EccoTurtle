@@ -974,7 +974,11 @@ def run():
                 save_highscore(highscore_path, highscore)
         
         # Draw everything
-        draw_environment(base, current_env, int(world_offset), int(t))
+        draw_environment(base, current_env,
+                         int(world_offset * 0.5),
+                         int(world_offset * 0.8),
+                         int(world_offset),
+                         int(t))
         
         # Draw entities
         for j in jellies:
