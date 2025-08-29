@@ -489,6 +489,33 @@ class Pufferfish:
         # Eye
         pygame.draw.circle(surf, (0, 0, 0), (cx + 3, cy - 2), 1)
 
+class Particle:
+    def __init__(self, x, y, vx, vy, life, color, radius=2, kind="dot"):
+        self.x, self.y = float(x), float(y)
+        self.vx, self.vy = float(vx), float(vy)
+        self.life = float(life)
+        self.color = color
+        self.radius = radius
+        self.kind = kind
+
+    def update(self, dt):
+        dt_sec = dt / 1000.0
+        self.x += self.vx * dt_sec
+        self.y += self.vy * dt_sec
+        self.life -= dt_sec
+
+    def draw(self, surf):
+        if self.life <= 0:
+            return
+        if self.kind == "rain":
+            end_y = self.y + self.radius * 2
+            pygame.draw.line(surf, self.color,
+                             (int(self.x), int(self.y)),
+                             (int(self.x), int(end_y)))
+        else:
+            pygame.draw.circle(surf, self.color,
+                               (int(self.x), int(self.y)), self.radius)
+
 class Bubble:
     def __init__(self, x, y):
         self.x, self.y = float(x), float(y)
@@ -745,6 +772,7 @@ def run():
     bags = []
     creatures = []  # New interactive creatures
     bubbles = []
+    particles = []
     
     # Environment management
     environments = [Environment.BEACH, Environment.CORAL_COVE, Environment.ROCKY_REEF,
@@ -829,6 +857,7 @@ def run():
                     bags = []
                     creatures = []
                     bubbles = []
+                    particles = []
                     score = 0
                     streak = 0
                     distance_traveled = 0
@@ -873,7 +902,29 @@ def run():
                         Jelly(base_w + rng.randrange(20, 100),
                               rng.randrange(20, base_h - 20))
                     )
-            
+
+            # Spawn environment-specific particles
+            if current_env == Environment.BEACH:
+                if rng.random() < 0.6:
+                    x = rng.randrange(0, base_w)
+                    vy = rng.uniform(120, 180)
+                    particles.append(Particle(x, -5, 0, vy,
+                                             base_h / vy + 1.0,
+                                             (200, 200, 255), 2, "rain"))
+            else:
+                if rng.random() < 0.3:
+                    y = rng.randrange(0, base_h)
+                    vx = -rng.uniform(10, 30)
+                    vy = rng.uniform(-5, 5)
+                    particles.append(Particle(base_w + 5, y, vx, vy,
+                                             10.0, (200, 255, 200), 1))
+
+            # Update particles before other entities
+            for p in particles[:]:
+                p.update(dt)
+                if p.life <= 0 or p.y > base_h + 10 or p.x < -10:
+                    particles.remove(p)
+
             # Update turtle
             turtle.update(dt, keys, scroll_speed)
             
@@ -985,7 +1036,9 @@ def run():
         # Draw everything
         draw_environment(base, current_env, int(world_offset), int(t), time_of_day)
         
-        # Draw entities
+        # Draw particles and entities
+        for p in particles:
+            p.draw(base)
         for j in jellies:
             j.draw(base)
         for b in bags:
