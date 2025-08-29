@@ -70,9 +70,10 @@ class Turtle:
             self.body_color = (140, 32, 110)
             self.accent_color = (235, 190, 220)
         elif character_type == CharacterType.BISEXUAL_TURTLE:
-            self.shell_color = (255, 255, 255)
-            self.body_color = (255, 255, 255)
-            self.accent_color = (255, 255, 255)
+            # Rainbow shell, but keep body tones so it looks like a turtle
+            self.shell_color = (30, 120, 100)
+            self.body_color = (40, 150, 125)
+            self.accent_color = (200, 235, 220)
         else:  # Tortoise
             self.shell_color = (92, 64, 35)
             self.body_color = (115, 80, 44)
@@ -176,17 +177,34 @@ class Turtle:
         head_color = self.accent_color
 
         if self.rainbow:
-            for i in range(7):
-                color = pygame.Color(0)
-                hue = (self.rainbow_phase + i * (360 / 7)) % 360
-                color.hsva = (hue, 80, 100, 100)
-                radius = max(1, int(r - i * r / 7))
-                pygame.draw.circle(surf, color, (cx, cy), radius)
-            pygame.draw.circle(surf, (255, 255, 255), (cx, cy), r, 2)
+            # Shell base (ellipse) with subtle outline so it reads as a turtle
+            shell_base = pygame.Color(20, 80, 70)
+            pygame.draw.ellipse(surf, shell_base, (cx-r, cy-r, r*2, r*2))
+            pygame.draw.ellipse(surf, (10, 50, 45), (cx-r, cy-r, r*2, r*2), 2)
+
+            # Rainbow segments radiating from center like a turtle shell pattern
+            segments = 6
+            for i in range(segments):
+                hue = (self.rainbow_phase + i * (360 / segments)) % 360
+                seg_color = pygame.Color(0)
+                seg_color.hsva = (hue, 80, 100, 100)
+                angle_deg = i * (360 / segments)
+                ax = math.cos(math.radians(angle_deg))
+                ay = math.sin(math.radians(angle_deg))
+                px = cx + int(ax * r * 0.65)
+                py = cy + int(ay * r * 0.65)
+                pygame.draw.circle(surf, seg_color, (px, py), 3)
+
+            # Soft highlight ring to give a shell sheen
+            ring_color = pygame.Color(0)
+            ring_color.hsva = ((self.rainbow_phase + 30) % 360, 30, 100, 100)
+            pygame.draw.ellipse(surf, ring_color, (cx-r+2, cy-r+2, (r*2)-4, (r*2)-4), 2)
+
+            # Rainbow-tinted flippers and head
             flipper_color = pygame.Color(0)
             flipper_color.hsva = (self.rainbow_phase % 360, 80, 100, 100)
             head_color = pygame.Color(0)
-            head_color.hsva = ((self.rainbow_phase + 180) % 360, 80, 100, 100)
+            head_color.hsva = ((self.rainbow_phase + 180) % 360, 70, 100, 100)
         else:
             # Shell base
             pygame.draw.ellipse(surf, self.shell_color, (cx-r, cy-r, r*2, r*2))
@@ -237,11 +255,28 @@ class Turtle:
         ty = cy - int(math.sin(math.radians(self.angle)) * r * 1.0)
         pygame.draw.circle(surf, flipper_color, (tx, ty), 2)
         
-        # Mouth animation when eating
+        # Mouth animation when eating (beak-like chomp)
         if self.mouth_timer > 0:
-            mx = cx + int(math.cos(math.radians(self.angle)) * r * 1.5)
-            my = cy + int(math.sin(math.radians(self.angle)) * r * 1.5)
-            pygame.draw.circle(surf, (255, 255, 255), (mx, my), 2)
+            ang = math.radians(self.angle)
+            dirx, diry = math.cos(ang), math.sin(ang)
+            perpx, perpy = -diry, dirx
+            base_x = cx + int(dirx * r * 1.0)
+            base_y = cy + int(diry * r * 1.0)
+            # Chomp opens then closes over ~0.4s
+            phase = max(0.0, min(1.0, self.mouth_timer / 0.4))
+            open_amt = math.sin(phase * math.pi)  # 0..1..0
+            jaw_len = int(r * 0.9)
+            jaw_width = 2 + int(5 * open_amt)
+            tip_x = base_x + int(dirx * jaw_len)
+            tip_y = base_y + int(diry * jaw_len)
+            upper_base = (base_x - int(perpx * jaw_width), base_y - int(perpy * jaw_width))
+            lower_base = (base_x + int(perpx * jaw_width), base_y + int(perpy * jaw_width))
+            upper_tip = (tip_x - int(perpx * (jaw_width * 0.6)), tip_y - int(perpy * (jaw_width * 0.6)))
+            lower_tip = (tip_x + int(perpx * (jaw_width * 0.6)), tip_y + int(perpy * (jaw_width * 0.6)))
+            mouth_color = (245, 250, 255)
+            outline = (20, 40, 30)
+            pygame.draw.polygon(surf, mouth_color, [upper_base, upper_tip, lower_tip, lower_base])
+            pygame.draw.lines(surf, outline, True, [upper_base, upper_tip, lower_tip, lower_base], 1)
 
 class Jelly:
     def __init__(self, x, y):
@@ -267,19 +302,41 @@ class Jelly:
 
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
-        # Enhanced jellyfish with translucent dome and inner glow
-        pygame.draw.circle(surf, (231, 192, 255), (cx, cy), self.r)
-        pygame.draw.circle(surf, (250, 240, 255), (cx, cy-2), self.r-3)
-        pygame.draw.circle(surf, (255, 255, 255), (cx, cy-4), 1)
-        
-        # Animated tentacles
-        tentacle_wave = math.sin(self.phase * 2) * 2
-        for i in range(-3, 4):
-            tx = cx + i * 2
-            ty_start = cy + self.r - 1
-            ty_end = cy + self.r + 6 + abs(tentacle_wave)
-            tx_end = tx + int(tentacle_wave * 0.5)
-            pygame.draw.line(surf, (216, 172, 240), (tx, ty_start), (tx_end, ty_end), 1)
+        r = self.r
+        # High-detail translucent bell using an alpha surface
+        size = r * 4
+        js = pygame.Surface((size, size), pygame.SRCALPHA)
+        jcx, jcy = size // 2, size // 2
+        # Radial gradient
+        for rr in range(r, 0, -1):
+            a = int(90 + 140 * (rr / r))
+            col = (230, 200, 255, a)
+            pygame.draw.circle(js, col, (jcx, jcy), rr)
+        # Rim highlight
+        pygame.draw.circle(js, (255, 255, 255, 200), (jcx, jcy - 1), max(1, r - 2), 1)
+        # Inner nucleus pulsating
+        core_r = max(1, int(r * (0.35 + 0.15 * math.sin(self.phase * 3))))
+        pygame.draw.circle(js, (255, 255, 180, 180), (jcx, jcy - 2), core_r)
+        # Small crown
+        pygame.draw.circle(js, (240, 80, 120, 220), (jcx, jcy - r), max(1, r // 3))
+        # Blit bell
+        surf.blit(js, (cx - jcx, cy - jcy))
+
+        # Flowing, segmented tentacles with curvature
+        tentacle_count = 6
+        wave = math.sin(self.phase * 2)
+        for i in range(tentacle_count):
+            t_off = (i - (tentacle_count - 1) / 2) * 2
+            sx = cx + int(t_off)
+            sy = cy + r - 1
+            length = 8 + int(4 * (0.5 + 0.5 * math.sin(self.phase + i)))
+            points = []
+            for s in range(5):
+                t = s / 4.0
+                px = sx + int((wave * 2 + math.sin(self.phase * 3 + i) * 1.5) * t * 3)
+                py = sy + int(length * t)
+                points.append((px, py))
+            pygame.draw.lines(surf, (216, 172, 240), False, points, 1)
 
 class PlasticBag:
     def __init__(self, x, y):
