@@ -10,10 +10,11 @@ from .environment import Environment
 from .config import (MUSIC_BEACH_FILE, MUSIC_CORAL_FILE, MUSIC_REEF_FILE,
                      MUSIC_OCEAN_FILE, MUSIC_RIG_FILE,
                      SFX_DASH_FILE, SFX_EAT_FILE,
-                     SFX_HURT_FILE, SFX_POWERUP_FILE)
+                     SFX_HURT_FILE, SFX_POWERUP_FILE,
+                     ENV_DURATION_SEC)
 
 
-def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100):
+def write_wav_deep_synth_melody(path, tempo_bpm=100, duration_sec=90.0, sample_rate=44100):
     melody = [
         ("A3",2),("C4",2),("E4",2),("D4",2),
         ("F3",2),("A3",2),("C4",2),("E4",2),
@@ -42,6 +43,8 @@ def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100)
         return A4 * (2 ** (semis/12))
 
     spb = 60.0/tempo_bpm
+    # We generate enough bars to cover the requested duration
+    bars = max(1, int(math.ceil((duration_sec) / (8*spb))))
     total_beats = bars*8
     total_seconds = total_beats*spb
     num_samples = int(total_seconds*sample_rate)
@@ -68,6 +71,7 @@ def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100)
     place_line(melody[:bars_len_beats], 0, mel_timeline)
     place_line(bass_notes, 0, bass_timeline)
 
+    # Stereo mix buffers (L/R)
     data = bytearray()
     reverb_buffer = [0.0] * 8000
     reverb_idx = 0
@@ -115,10 +119,29 @@ def write_wav_deep_synth_melody(path, tempo_bpm=100, bars=16, sample_rate=44100)
         else:
             sample = max(-1.0, min(1.0, sample))
 
-        data += struct.pack('<h', int(sample*32767))
+        # Subtle chorus + stereo spread: 6 ms delay to right, 3 ms to left
+        delay_l = int(0.003 * sample_rate)
+        delay_r = int(0.006 * sample_rate)
+        idx_l = max(0, i - delay_l)
+        idx_r = max(0, i - delay_r)
+
+        # Simple echoes using reverb buffer content
+        echo_l = reverb_buffer[(reverb_idx - 2500) % len(reverb_buffer)] * 0.15
+        echo_r = reverb_buffer[(reverb_idx - 4500) % len(reverb_buffer)] * 0.15
+
+        # The dry signal
+        s = sample
+        # L/R mix with tiny detune to emulate 90s console width
+        left = s * 0.85 + echo_l
+        right = s * 0.85 + echo_r
+
+        left = max(-1.0, min(1.0, left))
+        right = max(-1.0, min(1.0, right))
+
+        data += struct.pack('<hh', int(left*32767), int(right*32767))
 
     with wave.open(path, 'wb') as wf:
-        wf.setnchannels(1)
+        wf.setnchannels(2)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes(data)
@@ -179,15 +202,15 @@ def load_or_generate_audio():
 
     # Generate music for each environment if missing with varied moods
     if not os.path.exists(music_map[Environment.BEACH]):
-        write_wav_deep_synth_melody(music_map[Environment.BEACH], tempo_bpm=120)
+        write_wav_deep_synth_melody(music_map[Environment.BEACH], tempo_bpm=120, duration_sec=ENV_DURATION_SEC)
     if not os.path.exists(music_map[Environment.CORAL_COVE]):
-        write_wav_deep_synth_melody(music_map[Environment.CORAL_COVE], tempo_bpm=100)
+        write_wav_deep_synth_melody(music_map[Environment.CORAL_COVE], tempo_bpm=100, duration_sec=ENV_DURATION_SEC)
     if not os.path.exists(music_map[Environment.ROCKY_REEF]):
-        write_wav_deep_synth_melody(music_map[Environment.ROCKY_REEF], tempo_bpm=90)
+        write_wav_deep_synth_melody(music_map[Environment.ROCKY_REEF], tempo_bpm=90, duration_sec=ENV_DURATION_SEC)
     if not os.path.exists(music_map[Environment.OCEAN_FLOOR]):
-        write_wav_deep_synth_melody(music_map[Environment.OCEAN_FLOOR], tempo_bpm=70)
+        write_wav_deep_synth_melody(music_map[Environment.OCEAN_FLOOR], tempo_bpm=70, duration_sec=ENV_DURATION_SEC)
     if not os.path.exists(music_map[Environment.OIL_RIG]):
-        write_wav_deep_synth_melody(music_map[Environment.OIL_RIG], tempo_bpm=60)
+        write_wav_deep_synth_melody(music_map[Environment.OIL_RIG], tempo_bpm=60, duration_sec=ENV_DURATION_SEC)
 
     # Softer chomp sound
     if not os.path.exists(eat):

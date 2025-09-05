@@ -8,7 +8,9 @@ import pygame
 from pygame.locals import *
 
 from .config import (TITLE, DEFAULT_W, DEFAULT_H, SCALE, FPS,
-                     POWERUP_THRESHOLD, POWERUP_DURATION, SAVE_FILE)
+                     POWERUP_THRESHOLD, POWERUP_DURATION, SAVE_FILE,
+                     ENV_DURATION_SEC, MUSIC_FADE_MS, CURRENT_DRIFT_SPEED,
+                     ENABLE_CRT)
 from .environment import Environment, draw_environment
 from .sound import load_or_generate_audio, play_sfx, _sfx
 
@@ -25,7 +27,7 @@ def _msgbox(title, text):
 class CharacterType:
     MALE_TURTLE = "Male Sea Turtle"
     FEMALE_TURTLE = "Female Sea Turtle"
-    BISEXUAL_TURTLE = "Bi Sea Turtle"
+    NONBINARY_TURTLE = "Non-binary Sea Turtle"
     TORTOISE = "Land Tortoise"
 
 # ----------------------- Game Objects ----------------------
@@ -34,7 +36,8 @@ class Turtle:
         self.x, self.y = float(x), float(y)
         self.vx, self.vy = 0.0, 0.0
         self.angle = 0.0
-        self.base_speed = 3.0
+        # Speed boosted 50%
+        self.base_speed = 4.5
         self.speed = self.base_speed
         self.drag = 0.92
         self.radius = 10
@@ -66,17 +69,17 @@ class Turtle:
             self.shell_color = (102, 18, 85)
             self.body_color = (140, 32, 110)
             self.accent_color = (235, 190, 220)
-        elif character_type == CharacterType.BISEXUAL_TURTLE:
-            self.shell_color = (255, 255, 255)
-            self.body_color = (255, 255, 255)
-            self.accent_color = (255, 255, 255)
+        elif character_type == CharacterType.NONBINARY_TURTLE:
+            # Non-binary palette (yellow/white/purple/black inspired, no rainbow effect)
+            self.shell_color = (240, 220, 70)
+            self.body_color = (235, 235, 235)
+            self.accent_color = (120, 75, 160)
         else:  # Tortoise
             self.shell_color = (92, 64, 35)
             self.body_color = (115, 80, 44)
             self.accent_color = (140, 120, 80)
 
-        self.rainbow = (character_type == CharacterType.BISEXUAL_TURTLE)
-        self.rainbow_phase = 0.0
+        # No rainbow theme
 
     def update(self, dt, keys, scroll_speed):
         dt_sec = dt / 1000.0
@@ -122,7 +125,7 @@ class Turtle:
             self.cooldown = 1.0
             play_sfx("dash")
         else:
-            # Normal movement with side-scrolling bias
+            # Normal movement (no auto push)
             self.vx += ax * current_speed * dt_sec * 60
             self.vy += ay * current_speed * dt_sec * 60
         
@@ -131,7 +134,8 @@ class Turtle:
         self.vy *= (1.0 - (1.0 - self.drag) * dt_sec * 60)
         
         # Auto-scroll with the level but reduce current pushing right
-        self.x += (self.vx + scroll_speed * 0.2) * dt_sec
+        # Camera scroll handled in main loop; turtle has no auto push
+        self.x += (self.vx) * dt_sec
         self.y += self.vy * dt_sec
         
         # Get current screen dimensions
@@ -157,8 +161,7 @@ class Turtle:
             if self.powerup_timer <= 0:
                 self.powered_up = False
 
-        if self.rainbow:
-            self.rainbow_phase = (self.rainbow_phase + dt_sec * 60) % 360
+        # no rainbow state
 
     def draw(self, surf):
         cx, cy = int(self.x), int(self.y)
@@ -172,30 +175,20 @@ class Turtle:
         flipper_color = self.shell_color
         head_color = self.accent_color
 
-        if self.rainbow:
-            for i in range(7):
-                color = pygame.Color(0)
-                hue = (self.rainbow_phase + i * (360 / 7)) % 360
-                color.hsva = (hue, 80, 100, 100)
-                radius = max(1, int(r - i * r / 7))
-                pygame.draw.circle(surf, color, (cx, cy), radius)
-            pygame.draw.circle(surf, (255, 255, 255), (cx, cy), r, 2)
-            flipper_color = pygame.Color(0)
-            flipper_color.hsva = (self.rainbow_phase % 360, 80, 100, 100)
-            head_color = pygame.Color(0)
-            head_color.hsva = ((self.rainbow_phase + 180) % 360, 80, 100, 100)
-        else:
-            # Shell base
-            pygame.draw.ellipse(surf, self.shell_color, (cx-r, cy-r, r*2, r*2))
+        # Shell base and subtle 90s-style shading
+        pygame.draw.ellipse(surf, self.shell_color, (cx-r, cy-r, r*2, r*2))
+        pygame.draw.ellipse(surf, (10, 20, 16), (cx-r, cy-r, r*2, r*2), 1)  # dark outline
 
-            # Shell pattern (hexagonal segments)
-            for angle in range(0, 360, 60):
-                px = cx + int(math.cos(math.radians(angle)) * r * 0.6)
-                py = cy + int(math.sin(math.radians(angle)) * r * 0.6)
-                pygame.draw.circle(surf, self.body_color, (px, py), 3)
+        # Shell pattern (hexagonal segments)
+        for angle in range(0, 360, 60):
+            px = cx + int(math.cos(math.radians(angle)) * r * 0.6)
+            py = cy + int(math.sin(math.radians(angle)) * r * 0.6)
+            pygame.draw.circle(surf, self.body_color, (px, py), 3)
 
-            # Shell highlight
-            pygame.draw.ellipse(surf, self.body_color, (cx-r+2, cy-r+2, (r*2)-4, (r*2)-4), 2)
+        # Shell highlight outline
+        pygame.draw.ellipse(surf, self.body_color, (cx-r+2, cy-r+2, (r*2)-4, (r*2)-4), 2)
+        # Specular highlight
+        pygame.draw.ellipse(surf, (230, 240, 230), (cx-r+5, cy-r+6, (r*2)-14, (r*2)-16), 1)
         
         # Head (bigger and more detailed)
         hx = cx + int(math.cos(math.radians(self.angle)) * r * 1.2)
@@ -219,7 +212,9 @@ class Turtle:
         f2x = int(math.cos(math.radians(self.angle - 60 - swim_offset)) * r * 1.0)
         f2y = int(math.sin(math.radians(self.angle - 60 - swim_offset)) * r * 1.0)
         pygame.draw.ellipse(surf, flipper_color, (cx+f1x-3, cy+f1y-2, 6, 4))
+        pygame.draw.ellipse(surf, (10,20,16), (cx+f1x-3, cy+f1y-2, 6, 4), 1)
         pygame.draw.ellipse(surf, flipper_color, (cx+f2x-3, cy+f2y-2, 6, 4))
+        pygame.draw.ellipse(surf, (10,20,16), (cx+f2x-3, cy+f2y-2, 6, 4), 1)
         
         # Back flippers
         b1x = int(math.cos(math.radians(self.angle + 150 - swim_offset)) * r * 0.8)
@@ -227,7 +222,9 @@ class Turtle:
         b2x = int(math.cos(math.radians(self.angle - 150 + swim_offset)) * r * 0.8)
         b2y = int(math.sin(math.radians(self.angle - 150 + swim_offset)) * r * 0.8)
         pygame.draw.ellipse(surf, flipper_color, (cx+b1x-2, cy+b1y-2, 4, 3))
+        pygame.draw.ellipse(surf, (10,20,16), (cx+b1x-2, cy+b1y-2, 4, 3), 1)
         pygame.draw.ellipse(surf, flipper_color, (cx+b2x-2, cy+b2y-2, 4, 3))
+        pygame.draw.ellipse(surf, (10,20,16), (cx+b2x-2, cy+b2y-2, 4, 3), 1)
         
         # Tail
         tx = cx - int(math.cos(math.radians(self.angle)) * r * 1.0)
@@ -268,6 +265,7 @@ class Jelly:
         pygame.draw.circle(surf, (231, 192, 255), (cx, cy), self.r)
         pygame.draw.circle(surf, (250, 240, 255), (cx, cy-2), self.r-3)
         pygame.draw.circle(surf, (255, 255, 255), (cx, cy-4), 1)
+        pygame.draw.circle(surf, (60, 40, 80), (cx, cy), self.r, 1)
         
         # Animated tentacles
         tentacle_wave = math.sin(self.phase * 2) * 2
@@ -304,6 +302,7 @@ class PlasticBag:
         bag_color = (235, 245, 255)
         # Main body
         pygame.draw.rect(surf, bag_color, (cx-5, cy-7, 10, 12), 1)
+        pygame.draw.rect(surf, (80, 90, 100), (cx-5, cy-7, 10, 12), 1)
         # Slight shading
         pygame.draw.line(surf, (215, 225, 235), (cx-5, cy-1), (cx+5, cy-1))
         # Handles
@@ -486,6 +485,105 @@ class Pufferfish:
         # Eye
         pygame.draw.circle(surf, (0, 0, 0), (cx + 3, cy - 2), 1)
 
+# Additional 90s-flavor sea life (zone-specific)
+class Eel:
+    def __init__(self, x, y):
+        self.x, self.y = float(x), float(y)
+        self.r = 6
+        self.wave = random.random() * math.tau
+        self.edible = True
+        self.value = 4
+        self.length = 14
+
+    def update(self, dt, scroll_speed):
+        dt_sec = dt / 1000.0
+        self.x -= scroll_speed * dt_sec * 0.9
+        self.wave += dt_sec * 6
+        self.y += math.sin(self.wave) * 20 * dt_sec
+
+    def draw(self, surf):
+        cx, cy = int(self.x), int(self.y)
+        color = (60, 180, 160)
+        # Draw a wavy segmented eel
+        for i in range(self.length):
+            px = cx - i * 2
+            py = cy + int(math.sin((self.wave*0.8) + i*0.4) * 2)
+            pygame.draw.circle(surf, color, (px, py), 2)
+
+class Stingray:
+    def __init__(self, x, y):
+        self.x, self.y = float(x), float(y)
+        self.r = 10
+        self.glide = random.random() * math.tau
+        self.edible = True
+        self.value = 6
+
+    def update(self, dt, scroll_speed):
+        dt_sec = dt / 1000.0
+        self.x -= scroll_speed * dt_sec * 1.0
+        self.glide += dt_sec
+        self.y += math.sin(self.glide*1.3) * 10 * dt_sec
+
+    def draw(self, surf):
+        cx, cy = int(self.x), int(self.y)
+        body = (70, 70, 110)
+        wing_span = 18
+        pygame.draw.polygon(surf, body, [(cx-wing_span, cy), (cx, cy-6), (cx+wing_span, cy), (cx, cy+6)])
+        # Tail
+        pygame.draw.line(surf, body, (cx+10, cy+2), (cx+18, cy+6), 2)
+
+class Anglerfish:
+    def __init__(self, x, y):
+        self.x, self.y = float(x), float(y)
+        self.r = 8
+        self.bob = random.random()*math.tau
+        self.edible = True
+        self.value = 7
+
+    def update(self, dt, scroll_speed):
+        dt_sec = dt / 1000.0
+        self.x -= scroll_speed * dt_sec * 0.6
+        self.bob += dt_sec * 2
+        self.y += math.sin(self.bob) * 10 * dt_sec
+
+    def draw(self, surf):
+        cx, cy = int(self.x), int(self.y)
+        body = (90, 60, 40)
+        pygame.draw.ellipse(surf, body, (cx-8, cy-5, 16, 10))
+        # Lure
+        pygame.draw.line(surf, (200, 170, 100), (cx-2, cy-5), (cx+4, cy-10), 1)
+        pygame.draw.circle(surf, (255, 240, 180), (cx+5, cy-11), 2)
+        # Teeth
+        pygame.draw.line(surf, (240, 220, 200), (cx+3, cy+2), (cx+5, cy+4), 1)
+        pygame.draw.line(surf, (240, 220, 200), (cx+5, cy+2), (cx+7, cy+4), 1)
+
+class Crab:
+    def __init__(self, x, y, ground_y_offset=12):
+        self.x, self.y = float(x), float(y)
+        self.ground = y
+        self.r = 6
+        self.dir = -1
+        self.edible = True
+        self.value = 3
+
+    def update(self, dt, scroll_speed):
+        dt_sec = dt / 1000.0
+        self.x -= scroll_speed * dt_sec * 0.8
+        # Keep near bottom
+        base_h = pygame.display.get_surface().get_height() // SCALE
+        self.y = base_h - 14
+
+    def draw(self, surf):
+        cx, cy = int(self.x), int(self.y)
+        body = (200, 60, 50)
+        pygame.draw.ellipse(surf, body, (cx-6, cy-4, 12, 8))
+        # Legs
+        pygame.draw.line(surf, body, (cx-5, cy+2), (cx-8, cy+4), 2)
+        pygame.draw.line(surf, body, (cx+5, cy+2), (cx+8, cy+4), 2)
+        # Claws
+        pygame.draw.circle(surf, body, (cx-8, cy-2), 2)
+        pygame.draw.circle(surf, body, (cx+8, cy-2), 2)
+
 class Bubble:
     def __init__(self, x, y):
         self.x, self.y = float(x), float(y)
@@ -537,7 +635,7 @@ def character_selection_screen(screen, clock, base_font, title_font):
     characters = [
         (CharacterType.MALE_TURTLE, "Classic hero of the seas", (18, 102, 85)),
         (CharacterType.FEMALE_TURTLE, "Swift and graceful", (102, 18, 85)),
-        (CharacterType.BISEXUAL_TURTLE, "Loves all ocean creatures", (85, 18, 102)),
+        (CharacterType.NONBINARY_TURTLE, "Calm, focused explorer", (240, 220, 70)),
         (CharacterType.TORTOISE, "Adventurous land dweller", (92, 64, 35))  # No death hint
     ]
     
@@ -748,11 +846,21 @@ def run():
     current_env_index = 0
     current_env = environments[current_env_index]
     env_transition = 0
-    distance_traveled = 0
+    # Time-based environment duration
+    env_time = 0.0
+    transitioning = False
+    transition_timer = 0.0
     
-    # Side-scrolling variables
-    scroll_speed = 30  # pixels per second
-    world_offset = 0
+    # Camera + scrolling variables
+    world_offset = 0  # background parallax offset (pixels)
+    current_drift = CURRENT_DRIFT_SPEED  # ocean current for floating entities
+
+    # Ensure gameplay starts with the correct environment music
+    last_music_env = None
+    if last_music_env != current_env:
+        pygame.mixer.music.load(music_map[current_env])
+        pygame.mixer.music.play(-1, 0.0, MUSIC_FADE_MS)
+        last_music_env = current_env
     
     score = 0
     streak = 0
@@ -773,10 +881,16 @@ def run():
         bags.append(PlasticBag(rng.randrange(base_w//2, base_w), 
                               rng.randrange(20, base_h-20)))
     
-    # Add initial creatures
-    creatures.append(MantisShrimp(base_w - 50, base_h//2))
-    creatures.append(SeaHorse(base_w - 100, base_h//3))
-    creatures.append(Clownfish(base_w - 150, base_h*2//3))
+    # Add initial creatures (zone-specific variety)
+    initial_zone_map = {
+        Environment.BEACH: [SeaHorse, Clownfish, Crab],
+        Environment.CORAL_COVE: [Clownfish, SeaHorse, MantisShrimp],
+        Environment.ROCKY_REEF: [Eel, MantisShrimp],
+        Environment.OCEAN_FLOOR: [Anglerfish, Eel],
+        Environment.OIL_RIG: [Stingray, Eel],
+    }
+    for i, C in enumerate(initial_zone_map.get(current_env, [SeaHorse, Clownfish])):
+        creatures.append(C(base_w - 50 - i*40, base_h//2 + (i-1)*base_h//6))
     
     while True:
         dt = clock.tick(FPS)
@@ -824,12 +938,15 @@ def run():
                     bubbles = []
                     score = 0
                     streak = 0
-                    distance_traveled = 0
+                    env_time = 0.0
+                    transitioning = False
+                    transition_timer = 0.0
                     world_offset = 0
                     current_env_index = 0
                     current_env = environments[current_env_index]
                     pygame.mixer.music.load(music_map[current_env])
-                    pygame.mixer.music.play(-1)
+                    pygame.mixer.music.play(-1, 0.0, MUSIC_FADE_MS)
+                    last_music_env = current_env
                     
                     # Respawn entities
                     for _ in range(5):
@@ -838,35 +955,60 @@ def run():
                     for _ in range(3):
                         bags.append(PlasticBag(rng.randrange(base_w//2, base_w), 
                                               rng.randrange(20, base_h-20)))
-                    creatures.append(MantisShrimp(base_w - 50, base_h//2))
-                    creatures.append(SeaHorse(base_w - 100, base_h//3))
-                    creatures.append(Clownfish(base_w - 150, base_h*2//3))
+                    for i, C in enumerate(initial_zone_map.get(current_env, [SeaHorse, Clownfish])):
+                        creatures.append(C(base_w - 50 - i*40, base_h//2 + (i-1)*base_h//6))
                     start_menu = False
         
         keys = pygame.key.get_pressed()
         
         # Update game state
         if not (paused or game_over or start_menu):
-            # Update scrolling
-            world_offset += scroll_speed * (dt / 1000.0)
-            distance_traveled += scroll_speed * (dt / 1000.0)
-            
-            # Environment transitions every 500 pixels
-            if distance_traveled > 500:
-                distance_traveled = 0
-                current_env_index = (current_env_index + 1) % len(environments)
-                current_env = environments[current_env_index]
+            # Time based environment transitions to 90 seconds
+            if not transitioning:
+                env_time += dt / 1000.0
+                if env_time >= ENV_DURATION_SEC:
+                    transitioning = True
+                    transition_timer = MUSIC_FADE_MS / 1000.0
+                    pygame.mixer.music.fadeout(MUSIC_FADE_MS)
+            else:
+                transition_timer -= dt / 1000.0
+                if transition_timer <= 0:
+                    # Switch environment with fade-in
+                    env_time = 0.0
+                    transitioning = False
+                    current_env_index = (current_env_index + 1) % len(environments)
+                    current_env = environments[current_env_index]
+                    pygame.mixer.music.load(music_map[current_env])
+                    pygame.mixer.music.play(-1, 0.0, MUSIC_FADE_MS)
+                    last_music_env = current_env
+                    # spawn fresh food in new environment
+                    for _ in range(3):
+                        jellies.append(
+                            Jelly(base_w + rng.randrange(20, 100),
+                                  rng.randrange(20, base_h - 20))
+                        )
+
+            # Safety: if for any reason music got desynced, enforce correct track
+            if not transitioning and last_music_env != current_env:
                 pygame.mixer.music.load(music_map[current_env])
-                pygame.mixer.music.play(-1)
-                # spawn fresh food in new environment
-                for _ in range(3):
-                    jellies.append(
-                        Jelly(base_w + rng.randrange(20, 100),
-                              rng.randrange(20, base_h - 20))
-                    )
+                pygame.mixer.music.play(-1, 0.0, MUSIC_FADE_MS)
+                last_music_env = current_env
             
             # Update turtle
-            turtle.update(dt, keys, scroll_speed)
+            turtle.update(dt, keys, current_drift)
+            
+            # Camera follow: when turtle swims right past 60% of screen, move world
+            margin = max(12, int(turtle.radius) + 2)
+            right_guard = base_w - margin
+            left_guard = margin
+            if turtle.x > right_guard:
+                delta = turtle.x - right_guard
+                turtle.x = right_guard
+                world_offset += delta
+            elif turtle.x < left_guard and world_offset > 0:
+                delta = left_guard - turtle.x
+                turtle.x = left_guard
+                world_offset = max(0, world_offset - delta)
             
             # Check for tortoise death
             if turtle.is_tortoise and turtle.has_moved and turtle.health <= 0:
@@ -877,17 +1019,17 @@ def run():
             
             # Update entities
             for j in jellies[:]:
-                j.update(dt, scroll_speed)
+                j.update(dt, current_drift)
                 if j.x < -20:  # Remove off-screen
                     jellies.remove(j)
             
             for b in bags[:]:
-                b.update(dt, scroll_speed)
+                b.update(dt, current_drift)
                 if b.x < -20:
                     bags.remove(b)
             
             for c in creatures[:]:
-                c.update(dt, scroll_speed)
+                c.update(dt, current_drift)
                 if c.x < -20:
                     creatures.remove(c)
             
@@ -906,9 +1048,15 @@ def run():
             
             # Spawn creatures
             if rng.random() < 0.004:
-                creature_types = [MantisShrimp, SeaHorse, Clownfish, Pufferfish]
-                CreatureClass = rng.choice(creature_types)
-                creatures.append(CreatureClass(base_w + rng.randrange(20, 100), 
+                zone_map = {
+                    Environment.BEACH: [SeaHorse, Clownfish, Crab],
+                    Environment.CORAL_COVE: [Clownfish, SeaHorse, MantisShrimp],
+                    Environment.ROCKY_REEF: [Eel, MantisShrimp, Pufferfish],
+                    Environment.OCEAN_FLOOR: [Anglerfish, Eel, Pufferfish],
+                    Environment.OIL_RIG: [Stingray, Eel, Pufferfish],
+                }
+                CreatureClass = rng.choice(zone_map.get(current_env, [MantisShrimp]))
+                creatures.append(CreatureClass(base_w + rng.randrange(20, 100),
                                               rng.randrange(40, base_h-40)))
             
             # Limit entities
@@ -1038,6 +1186,14 @@ def run():
         
         # Scale to window
         pygame.transform.scale(base, (current_w, current_h), screen)
+        
+        # Optional CRT scanlines
+        if ENABLE_CRT:
+            overlay = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+            for y in range(0, current_h, 2):
+                pygame.draw.line(overlay, (0, 0, 0, 26), (0, y), (current_w, y))
+            pygame.draw.rect(overlay, (0, 0, 0, 28), (0, 0, current_w, current_h), 8)
+            screen.blit(overlay, (0, 0))
         pygame.display.flip()
 
 if __name__ == "__main__":

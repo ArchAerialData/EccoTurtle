@@ -9,6 +9,19 @@ DEFAULT_W, DEFAULT_H = 1280, 720
 SCALE = 4
 FPS = 60
 
+# Gameplay pacing
+# Each environment lasts this many seconds before switching
+ENV_DURATION_SEC = 90.0
+# Music fade in/out duration when switching environments (ms)
+MUSIC_FADE_MS = 4000
+# Constant ocean current that pushes floating objects left (px/sec)
+CURRENT_DRIFT_SPEED = 30
+
+# Visual toggles
+ENABLE_CRT = False  # Set True for scanline overlay
+ENABLE_CAUSTICS = True
+CAUSTICS_BRIGHTNESS = 40  # 0-255 alpha for caustics overlay
+
 # Background tracks for each environment
 MUSIC_BEACH_FILE = ASSET_DIR / 'music_beach.wav'
 MUSIC_CORAL_FILE = ASSET_DIR / 'music_coral.wav'
